@@ -1,5 +1,5 @@
 import React from 'react';
-import { School, ShieldCheck, LogOut } from 'lucide-react';
+import { ShieldCheck, LogOut } from 'lucide-react';
 import { useAuth } from '@/hooks';
 
 export const Header: React.FC = () => {
@@ -8,7 +8,11 @@ export const Header: React.FC = () => {
   return (
     <header className="h-16 bg-white border-b border-slate-200 px-4 sm:px-6 flex items-center justify-between shrink-0 shadow-xs gap-3">
       <div className="flex items-center space-x-3 min-w-0 flex-1">
-        <School className="w-5 h-5 text-emerald-700 shrink-0" />
+        <img
+          src="/logo-mamm.jpg"
+          alt="Insignia MAMM"
+          className="w-7 h-7 object-contain shrink-0 rounded-sm bg-white p-0.5 shadow-2xs border border-slate-200"
+        />
         <div className="min-w-0 truncate">
           <span className="font-semibold text-slate-800 text-sm truncate whitespace-nowrap inline-block max-w-[220px] sm:max-w-none">
             I.E. Emblemática Manuel Antonio Mesones Muro

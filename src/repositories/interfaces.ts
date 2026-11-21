@@ -109,8 +109,30 @@ export interface IPrestamoRepository {
 
 export interface IMantenimientoRepository {
   listar(): Promise<MantenimientoRegistro[]>;
-  registrar(registro: Omit<MantenimientoRegistro, 'id'>): Promise<string>;
-  cerrar(
+  listarPorBien(bienId: string): Promise<MantenimientoRegistro[]>;
+  abrirMantenimiento(
+    datos: {
+      bienId: string;
+      tipo: 'PREVENTIVO' | 'CORRECTIVO';
+      descripcionFalla: string;
+      tecnico: string;
+      fechaInicio?: string | Date;
+    },
+    usuarioOperador?: OperadorInfo
+  ): Promise<string>;
+  cerrarMantenimiento(
+    mantenimientoId: string,
+    cierre: {
+      fechaFin?: string | Date;
+      trabajoRealizado: string;
+      repuestos: string;
+      estadoConservacionResultante: BienPatrimonial['estado_conservacion'];
+      estadoOperativoResultante: BienPatrimonial['estado_operativo'];
+    },
+    usuarioOperador?: OperadorInfo
+  ): Promise<void>;
+  registrar?(registro: Omit<MantenimientoRegistro, 'id'>): Promise<string>;
+  cerrar?(
     id: string,
     fechaFin: string | Date,
     trabajoRealizado: string,
@@ -120,8 +142,21 @@ export interface IMantenimientoRepository {
 }
 
 export interface IMovimientoRepository {
+  listar(): Promise<MovimientoBien[]>;
   listarPorBien(bienId: string): Promise<MovimientoBien[]>;
-  registrarTraslado(movimiento: Omit<MovimientoBien, 'id'>): Promise<string>;
+  registrarTraslado(
+    movimiento: Omit<MovimientoBien, 'id' | 'fecha_movimiento'>,
+    usuarioOperador?: OperadorInfo
+  ): Promise<string>;
+  registrarTrasladoMasivo(
+    bienIds: string[],
+    ambienteDestinoId: string,
+    ubicacionDetalleDestino: string,
+    motivo: string,
+    responsableReceptor: string,
+    responsableEntrega?: string,
+    usuarioOperador?: OperadorInfo
+  ): Promise<{ loteId: string; totalMovimientos: number }>;
 }
 
 export interface IDocenteRepository {

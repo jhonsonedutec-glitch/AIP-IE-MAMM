@@ -81,18 +81,33 @@ export interface MovimientoBien {
   id: string;
   bien_id: string;
   codigo_patrimonial: string;
+  etiqueta_interna?: string;
+  denominacion?: string;
+  marca?: string;
+  modelo?: string;
+  serie?: string;
+  estado_conservacion?: EstadoConservacion;
   ambiente_origen_id: string;
   ambiente_destino_id: string;
+  ubicacion_detalle_destino?: string;
+  responsable_entrega?: string;
   responsable_recepcion: string;
   motivo: string;
   usuario_id: string;
+  usuario_email?: string;
   fecha_movimiento: string | Date;
+  lote_id?: string;
 }
 
 export interface MantenimientoRegistro {
   id: string;
   bien_id: string;
   codigo_patrimonial: string;
+  etiqueta_interna?: string;
+  denominacion?: string;
+  marca?: string;
+  modelo?: string;
+  serie?: string;
   tipo: 'PREVENTIVO' | 'CORRECTIVO';
   descripcion_falla: string;
   trabajo_realizado: string;
@@ -100,7 +115,9 @@ export interface MantenimientoRegistro {
   tecnico: string;
   fecha_inicio: string | Date;
   fecha_fin?: string | Date;
+  estado_conservacion_inicial?: EstadoConservacion;
   estado_conservacion_resultante: EstadoConservacion;
+  estado_operativo_resultante?: EstadoOperativo;
   cerrado: boolean;
 }
 

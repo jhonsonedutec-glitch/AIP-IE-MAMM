@@ -146,7 +146,7 @@ export const BienFormModal: React.FC<BienFormModalProps> = ({
   const [categoriaId, setCategoriaId] = useState('');
   const [ambienteId, setAmbienteId] = useState('');
   const [ubicacionDetalle, setUbicacionDetalle] = useState('');
-  const [codigoPatrimonial, setCodigoPatrimonial] = useState('S/C');
+  const [codigoPatrimonial, setCodigoPatrimonial] = useState('');
   const [tipoCodigo, setTipoCodigo] = useState<'S/C' | 'CIC'>('S/C');
   const [etiquetaInterna, setEtiquetaInterna] = useState('');
 
@@ -157,7 +157,7 @@ export const BienFormModal: React.FC<BienFormModalProps> = ({
   // Estados para Modelo
   const [modeloSelect, setModeloSelect] = useState<string>('PRODESK 400');
   const [modeloOtro, setModeloOtro] = useState('');
-  const [serie, setSerie] = useState('S/N');
+  const [serie, setSerie] = useState('');
 
   // Estados para Color
   const [colorSelect, setColorSelect] = useState<string>('NEGRO');
@@ -220,7 +220,7 @@ export const BienFormModal: React.FC<BienFormModalProps> = ({
       setCategoriaId(bienParaEditar.categoria_id || '');
       setAmbienteId(bienParaEditar.ambiente_id || '');
       setUbicacionDetalle(bienParaEditar.ubicacion_detalle || '');
-      setCodigoPatrimonial(bienParaEditar.codigo_patrimonial || 'S/C');
+      setCodigoPatrimonial(bienParaEditar.codigo_patrimonial || '');
       setTipoCodigo(bienParaEditar.tipo_codigo || 'S/C');
       setEtiquetaInterna(bienParaEditar.etiqueta_interna || '');
 
@@ -255,7 +255,7 @@ export const BienFormModal: React.FC<BienFormModalProps> = ({
         setModeloOtro('');
       }
 
-      setSerie(bienParaEditar.serie || 'S/N');
+      setSerie(bienParaEditar.serie || '');
 
       // Manejo inteligente de Color en edición
       const c = (bienParaEditar.color || '').trim().toUpperCase();
@@ -284,6 +284,14 @@ export const BienFormModal: React.FC<BienFormModalProps> = ({
       setModeloOtro('');
       setColorSelect('NEGRO');
       setColorOtro('');
+      setCodigoPatrimonial('');
+      setTipoCodigo('S/C');
+      setSerie('');
+      setEtiquetaInterna('');
+      setEstacionGrupo('');
+      setEstadoConservacion('B');
+      setEstadoOperativo('OPERATIVO');
+      setObservacion('');
       setUbicacionDetalle('');
       if (categorias.length > 0) setCategoriaId(categorias[0].id);
       if (ambientes.length > 0) setAmbienteId(ambientes[0].id);
@@ -347,6 +355,18 @@ export const BienFormModal: React.FC<BienFormModalProps> = ({
       return;
     }
 
+    // Saneamiento y valores por defecto para Código Patrimonial y Tipo de Código
+    const cleanCodigo = codigoPatrimonial.trim().toUpperCase();
+    const codigoFinal = cleanCodigo || 'S/C';
+    let tipoCodigoFinal = tipoCodigo;
+    if (cleanCodigo && cleanCodigo !== 'S/C' && tipoCodigo === 'S/C') {
+      tipoCodigoFinal = 'CIC';
+    }
+
+    // Saneamiento y valor por defecto para Número de Serie
+    const cleanSerie = serie.trim().toUpperCase();
+    const serieFinal = cleanSerie || 'S/N';
+
     setLoading(true);
     setError(null);
 
@@ -361,13 +381,13 @@ export const BienFormModal: React.FC<BienFormModalProps> = ({
             categoria_id: categoriaId,
             ambiente_id: ambienteId,
             ubicacion_detalle: esAmbienteOtros ? ubicacionDetalle.trim() : '',
-            codigo_patrimonial: codigoPatrimonial.trim() || 'S/C',
-            tipo_codigo: tipoCodigo,
+            codigo_patrimonial: codigoFinal,
+            tipo_codigo: tipoCodigoFinal,
             etiqueta_interna: etiquetaInterna.trim() || bienParaEditar.etiqueta_interna,
             codigo_qr: etiquetaInterna.trim() || bienParaEditar.codigo_qr,
             marca: marcaFinal,
             modelo: modeloFinal,
-            serie: serie.trim() || 'S/N',
+            serie: serieFinal,
             color: colorFinal,
             estacion_grupo: estacionGrupo.trim() || '',
             estado_conservacion: estadoConservacion,
@@ -383,13 +403,13 @@ export const BienFormModal: React.FC<BienFormModalProps> = ({
             categoria_id: categoriaId,
             ambiente_id: ambienteId,
             ubicacion_detalle: esAmbienteOtros ? ubicacionDetalle.trim() : '',
-            codigo_patrimonial: codigoPatrimonial.trim() || 'S/C',
-            tipo_codigo: tipoCodigo,
+            codigo_patrimonial: codigoFinal,
+            tipo_codigo: tipoCodigoFinal,
             etiqueta_interna: etiquetaInterna.trim() || '',
             codigo_qr: etiquetaInterna.trim() || '',
             marca: marcaFinal,
             modelo: modeloFinal,
-            serie: serie.trim() || 'S/N',
+            serie: serieFinal,
             color: colorFinal,
             estacion_grupo: estacionGrupo.trim() || '',
             estado_conservacion: estadoConservacion,
@@ -502,8 +522,19 @@ export const BienFormModal: React.FC<BienFormModalProps> = ({
               <input
                 type="text"
                 value={codigoPatrimonial}
-                onChange={(e) => setCodigoPatrimonial(e.target.value.toUpperCase())}
-                placeholder="S/C o código numérico"
+                onChange={(e) => {
+                  const val = e.target.value.toUpperCase();
+                  setCodigoPatrimonial(val);
+                  if (val.trim() && val.trim() !== 'S/C' && tipoCodigo === 'S/C') {
+                    setTipoCodigo('CIC');
+                  }
+                }}
+                onFocus={() => {
+                  if (codigoPatrimonial.trim().toUpperCase() === 'S/C') {
+                    setCodigoPatrimonial('');
+                  }
+                }}
+                placeholder="S/C — Digita o pega el código (vacío = S/C)"
                 className="w-full px-3 py-2 text-sm font-mono bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
               />
             </div>
@@ -593,7 +624,13 @@ export const BienFormModal: React.FC<BienFormModalProps> = ({
                 type="text"
                 value={serie}
                 onChange={(e) => setSerie(e.target.value.toUpperCase())}
-                placeholder="S/N o serie exacta"
+                onFocus={() => {
+                  const s = serie.trim().toUpperCase();
+                  if (s === 'S/N' || s === 'S/S' || s === 'SIN SERIE') {
+                    setSerie('');
+                  }
+                }}
+                placeholder="S/N — Digita o pega la serie (vacío = S/N)"
                 className="w-full px-3 py-2 text-sm font-mono bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
               />
             </div>

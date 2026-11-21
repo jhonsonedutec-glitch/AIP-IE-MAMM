@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   Laptop,
@@ -9,8 +9,16 @@ import {
   History,
   Wrench,
   ArrowLeftRight,
+  Clock,
 } from 'lucide-react';
-import { BienPatrimonial, Ambiente, CategoriaEquipo } from '@/types';
+import {
+  BienPatrimonial,
+  Ambiente,
+  CategoriaEquipo,
+  MovimientoBien,
+  MantenimientoRegistro,
+} from '@/types';
+import { movimientoRepository, mantenimientoRepository } from '@/repositories';
 
 interface BienDetalleModalProps {
   bien: BienPatrimonial;
@@ -19,6 +27,17 @@ interface BienDetalleModalProps {
   onClose: () => void;
   onEdit?: () => void;
   canEdit?: boolean;
+}
+
+interface EventoTimeline {
+  id: string;
+  tipo: 'TRASLADO' | 'MANTENIMIENTO';
+  fecha: Date;
+  titulo: string;
+  subtitulo: string;
+  detalle: string;
+  responsable: string;
+  badge: { texto: string; color: string };
 }
 
 export const BienDetalleModal: React.FC<BienDetalleModalProps> = ({
@@ -30,6 +49,36 @@ export const BienDetalleModal: React.FC<BienDetalleModalProps> = ({
   canEdit = false,
 }) => {
   const [tab, setTab] = useState<'ficha' | 'historial'>('ficha');
+
+  const [movimientos, setMovimientos] = useState<MovimientoBien[]>([]);
+  const [mantenimientos, setMantenimientos] = useState<MantenimientoRegistro[]>([]);
+  const [cargandoHistorial, setCargandoHistorial] = useState(false);
+
+  useEffect(() => {
+    let activo = true;
+    const cargarTrazabilidad = async () => {
+      setCargandoHistorial(true);
+      try {
+        const [movs, mants] = await Promise.all([
+          movimientoRepository.listarPorBien(bien.id),
+          mantenimientoRepository.listarPorBien(bien.id),
+        ]);
+        if (activo) {
+          setMovimientos(movs);
+          setMantenimientos(mants);
+        }
+      } catch (err) {
+        console.error('Error al cargar historial del bien:', err);
+      } finally {
+        if (activo) setCargandoHistorial(false);
+      }
+    };
+
+    cargarTrazabilidad();
+    return () => {
+      activo = false;
+    };
+  }, [bien.id]);
 
   const ambienteNombreBase =
     ambientes.find((a) => a.id === bien.ambiente_id)?.nombre || 'Ambiente no asignado';
@@ -89,6 +138,55 @@ export const BienDetalleModal: React.FC<BienDetalleModalProps> = ({
     }
   };
 
+  // Construir línea de tiempo cronológica unificada
+  const eventosTimeline: EventoTimeline[] = [
+    ...movimientos.map((m) => {
+      const ambOrig =
+        ambientes.find((a) => a.id === m.ambiente_origen_id)?.nombre || m.ambiente_origen_id;
+      const ambDestBase =
+        ambientes.find((a) => a.id === m.ambiente_destino_id)?.nombre || m.ambiente_destino_id;
+      const ambDest =
+        ambDestBase.trim().toLowerCase() === 'otros' && m.ubicacion_detalle_destino
+          ? `Otros (${m.ubicacion_detalle_destino})`
+          : ambDestBase;
+
+      return {
+        id: `mov-${m.id}`,
+        tipo: 'TRASLADO' as const,
+        fecha: new Date(m.fecha_movimiento),
+        titulo: 'Traslado entre Ambientes',
+        subtitulo: `${ambOrig} → ${ambDest}`,
+        detalle: m.motivo,
+        responsable: `Recibe: ${m.responsable_recepcion}${
+          m.responsable_entrega ? ` | Entrega: ${m.responsable_entrega}` : ''
+        }`,
+        badge: { texto: 'Traslado', color: 'bg-emerald-100 text-emerald-800' },
+      };
+    }),
+    ...mantenimientos.map((mt) => {
+      return {
+        id: `mant-${mt.id}`,
+        tipo: 'MANTENIMIENTO' as const,
+        fecha: new Date(mt.fecha_inicio),
+        titulo: `Mantenimiento ${mt.tipo} ${mt.cerrado ? '(Finalizado)' : '(En Proceso)'}`,
+        subtitulo: `Técnico: ${mt.tecnico}`,
+        detalle: `${mt.descripcion_falla}${
+          mt.trabajo_realizado ? ` — Solución: ${mt.trabajo_realizado}` : ''
+        }${mt.repuestos ? ` [Repuestos: ${mt.repuestos}]` : ''}`,
+        responsable: mt.cerrado
+          ? `Cerrado el ${formatFecha(mt.fecha_fin)} | Estado resultante: ${mt.estado_conservacion_resultante}`
+          : 'Atención técnica en curso',
+        badge: {
+          texto: mt.tipo,
+          color:
+            mt.tipo === 'CORRECTIVO'
+              ? 'bg-rose-100 text-rose-800'
+              : 'bg-blue-100 text-blue-800',
+        },
+      };
+    }),
+  ].sort((a, b) => b.fecha.getTime() - a.fecha.getTime());
+
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
       <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full border border-slate-200 overflow-hidden my-6">
@@ -100,15 +198,15 @@ export const BienDetalleModal: React.FC<BienDetalleModalProps> = ({
             </div>
             <div>
               <div className="flex items-center space-x-2">
-                <span className="font-mono text-xs bg-emerald-950/80 text-emerald-300 px-2 py-0.5 rounded border border-emerald-800">
+                <span className="font-mono text-xs font-bold text-emerald-400 bg-emerald-950/80 px-2 py-0.5 rounded border border-emerald-800">
                   {bien.etiqueta_interna || 'S/E'}
                 </span>
-                <span className={`text-[11px] font-semibold px-2 py-0.5 rounded ${oper.color}`}>
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${oper.color}`}>
                   {oper.label}
                 </span>
               </div>
-              <h2 className="text-lg font-bold mt-1 text-white leading-tight">
-                {bien.denominacion}
+              <h2 className="text-base font-bold text-white mt-1">
+                {bien.denominacion} — {bien.marca} {bien.modelo}
               </h2>
             </div>
           </div>
@@ -121,126 +219,128 @@ export const BienDetalleModal: React.FC<BienDetalleModalProps> = ({
           </button>
         </div>
 
-        {/* Barra de Pestañas */}
-        <div className="flex border-b border-slate-200 bg-slate-50 px-5 text-xs font-semibold">
+        {/* Pestañas */}
+        <div className="flex border-b border-slate-200 bg-slate-50 px-6 text-xs font-semibold">
           <button
-            type="button"
             onClick={() => setTab('ficha')}
-            className={`py-3 px-4 border-b-2 transition-colors flex items-center space-x-1.5 ${
+            className={`py-3 px-4 border-b-2 flex items-center space-x-2 transition-colors ${
               tab === 'ficha'
                 ? 'border-emerald-600 text-emerald-700 bg-white'
                 : 'border-transparent text-slate-500 hover:text-slate-800'
             }`}
           >
             <Layers className="w-4 h-4" />
-            <span>Ficha Patrimonial (Anexo 01)</span>
+            <span>Ficha Técnica Patrimonial</span>
           </button>
           <button
-            type="button"
             onClick={() => setTab('historial')}
-            className={`py-3 px-4 border-b-2 transition-colors flex items-center space-x-1.5 ${
+            className={`py-3 px-4 border-b-2 flex items-center space-x-2 transition-colors ${
               tab === 'historial'
                 ? 'border-emerald-600 text-emerald-700 bg-white'
                 : 'border-transparent text-slate-500 hover:text-slate-800'
             }`}
           >
             <History className="w-4 h-4" />
-            <span>Trazabilidad y Mantenimiento</span>
+            <span>Hoja de Vida y Trazabilidad ({eventosTimeline.length})</span>
           </button>
         </div>
 
-        {/* Contenido Pestaña Ficha */}
+        {/* Contenido Pestaña Ficha Técnica */}
         {tab === 'ficha' && (
-          <div className="p-6 space-y-5 text-xs">
-            {/* Tarjeta de Código QR y Patrimonial */}
-            <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="p-6 space-y-4 text-xs max-h-[65vh] overflow-y-auto">
+            {/* Tarjeta de Identificación Oficial */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-4 bg-slate-50 rounded-xl border border-slate-200">
               <div>
-                <span className="text-[11px] font-semibold text-slate-500 block">
-                  Código Patrimonial
-                </span>
-                <span className="text-sm font-bold text-slate-900 font-mono">
+                <span className="text-slate-500 font-medium block">Código Patrimonial</span>
+                <span className="font-mono font-bold text-slate-900 text-sm">
                   {bien.codigo_patrimonial || 'S/C'}
                 </span>
-                <span className="text-[10px] text-slate-500 block mt-0.5">
-                  Tipo: {bien.tipo_codigo || 'S/C'}
+                <span className="text-[10px] text-slate-400 block font-sans">
+                  {bien.tipo_codigo === 'CIC' ? 'Con Código Inventario' : 'Sin Código'}
                 </span>
               </div>
-
               <div>
-                <span className="text-[11px] font-semibold text-slate-500 block">
-                  Etiqueta Interna / QR
-                </span>
-                <span className="text-sm font-bold text-emerald-700 font-mono flex items-center space-x-1">
-                  <QrCode className="w-4 h-4" />
-                  <span>{bien.etiqueta_interna || 'Sin Etiqueta'}</span>
-                </span>
-                <span className="text-[10px] text-slate-500 block mt-0.5">
-                  QR: {bien.codigo_qr}
+                <span className="text-slate-500 font-medium block">Número de Serie</span>
+                <span className="font-mono font-bold text-slate-900 text-sm">
+                  {bien.serie || 'S/N'}
                 </span>
               </div>
-
               <div>
-                <span className="text-[11px] font-semibold text-slate-500 block">
-                  Estado de Conservación
-                </span>
-                <span
-                  className={`inline-block mt-1 px-2.5 py-0.5 rounded border text-[11px] font-semibold ${cons.color}`}
-                >
-                  {cons.label}
+                <span className="text-slate-500 font-medium block">Etiqueta / QR</span>
+                <span className="font-mono font-bold text-emerald-700 text-sm flex items-center space-x-1">
+                  <QrCode className="w-3.5 h-3.5" />
+                  <span>{bien.etiqueta_interna || bien.codigo_qr || 'S/E'}</span>
                 </span>
               </div>
             </div>
 
-            {/* Datos Técnicos y Físicos */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-              <div>
+            {/* Especificaciones Físicas y Clasificación */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
                 <span className="text-slate-500 font-medium block">Categoría</span>
                 <span className="font-semibold text-slate-800">{categoriaNombre}</span>
               </div>
-
-              <div>
-                <span className="text-slate-500 font-medium block">Ubicación / Ambiente</span>
-                <span className="font-semibold text-slate-800 flex items-center space-x-1">
-                  <MapPin className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                  <span>{ambienteNombre}</span>
-                </span>
-              </div>
-
-              <div>
+              <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
                 <span className="text-slate-500 font-medium block">Marca</span>
                 <span className="font-semibold text-slate-800">{bien.marca || '—'}</span>
               </div>
-
-              <div>
+              <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
                 <span className="text-slate-500 font-medium block">Modelo</span>
                 <span className="font-semibold text-slate-800">{bien.modelo || '—'}</span>
               </div>
-
-              <div>
-                <span className="text-slate-500 font-medium block">Número de Serie</span>
-                <span className="font-semibold font-mono text-slate-800">{bien.serie || 'S/N'}</span>
-              </div>
-
-              <div>
+              <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
                 <span className="text-slate-500 font-medium block">Color</span>
                 <span className="font-semibold text-slate-800">{bien.color || '—'}</span>
               </div>
+            </div>
 
-              <div>
-                <span className="text-slate-500 font-medium block">Estación / Grupo</span>
-                <span className="font-semibold text-slate-800">{bien.estacion_grupo || '—'}</span>
+            {/* Ubicación y Estado */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200">
+                <span className="text-slate-500 font-semibold block mb-1">
+                  Ubicación Institucional
+                </span>
+                <div className="flex items-center space-x-2 text-slate-800">
+                  <MapPin className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span className="font-bold text-sm">{ambienteNombre}</span>
+                </div>
+                {bien.estacion_grupo && (
+                  <p className="text-[11px] text-slate-600 mt-1 pl-6">
+                    Estación / Grupo: <strong>{bien.estacion_grupo}</strong>
+                  </p>
+                )}
               </div>
 
-              <div>
-                <span className="text-slate-500 font-medium block">Préstamos Acumulados</span>
-                <span className="font-semibold text-slate-800">{bien.total_prestamos} salidas</span>
+              <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200">
+                <span className="text-slate-500 font-semibold block mb-1">
+                  Estado de Conservación
+                </span>
+                <span
+                  className={`inline-block px-2.5 py-1 rounded-md text-xs font-bold border ${cons.color}`}
+                >
+                  {cons.label}
+                </span>
+                <p className="text-[11px] text-slate-500 mt-1">
+                  Total de préstamos acumulados:{' '}
+                  <strong className="text-slate-800">{bien.total_prestamos}</strong>
+                </p>
               </div>
+            </div>
 
+            {/* Fechas de Registro y Actualización */}
+            <div className="grid grid-cols-2 gap-3 p-3 bg-slate-50 rounded-lg border border-slate-200 text-[11px]">
               <div>
                 <span className="text-slate-500 font-medium block">Registrado el</span>
                 <span className="font-medium text-slate-700 flex items-center space-x-1">
                   <Calendar className="w-3 h-3 text-slate-400" />
                   <span>{formatFecha(bien.fecha_registro)}</span>
+                </span>
+              </div>
+              <div>
+                <span className="text-slate-500 font-medium block">Última actualización</span>
+                <span className="font-medium text-slate-700 flex items-center space-x-1">
+                  <Clock className="w-3 h-3 text-slate-400" />
+                  <span>{formatFecha(bien.actualizado_en)}</span>
                 </span>
               </div>
             </div>
@@ -270,36 +370,64 @@ export const BienDetalleModal: React.FC<BienDetalleModalProps> = ({
           </div>
         )}
 
-        {/* Contenido Pestaña Historial */}
+        {/* Contenido Pestaña Historial y Hoja de Vida */}
         {tab === 'historial' && (
-          <div className="p-6 space-y-4 text-xs">
-            <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 flex items-start space-x-3">
-              <div className="p-2 bg-emerald-100 text-emerald-800 rounded-lg">
-                <ArrowLeftRight className="w-5 h-5" />
+          <div className="p-6 space-y-4 text-xs max-h-[65vh] overflow-y-auto">
+            {cargandoHistorial ? (
+              <div className="p-8 text-center text-slate-400">
+                Consultando trazabilidad y mantenimientos...
               </div>
-              <div>
-                <h4 className="font-bold text-slate-800">Módulo de Traslados (Fase 3)</h4>
-                <p className="text-slate-600 mt-1 leading-relaxed">
-                  Los registros de movimiento entre ambientes escolares y las Actas de Entrega /
-                  Recepción en PDF se vincularán automáticamente a este equipo en la Fase 3.
+            ) : eventosTimeline.length === 0 ? (
+              <div className="p-8 text-center bg-slate-50 rounded-xl border border-slate-200 text-slate-500">
+                <History className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                <p className="font-semibold text-slate-700">Sin historial registrado aún</p>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Este bien no registra traslados ni órdenes de soporte técnico hasta el momento.
                 </p>
               </div>
-            </div>
+            ) : (
+              <div className="relative pl-6 space-y-6 before:absolute before:left-2.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-200">
+                {eventosTimeline.map((ev) => {
+                  const esTraslado = ev.tipo === 'TRASLADO';
+                  return (
+                    <div key={ev.id} className="relative group">
+                      {/* Nodo icono en la línea */}
+                      <div
+                        className={`absolute -left-6 top-0 w-5 h-5 rounded-full flex items-center justify-center text-white ring-4 ring-white shadow-xs ${
+                          esTraslado ? 'bg-emerald-600' : 'bg-amber-600'
+                        }`}
+                      >
+                        {esTraslado ? (
+                          <ArrowLeftRight className="w-3 h-3" />
+                        ) : (
+                          <Wrench className="w-3 h-3" />
+                        )}
+                      </div>
 
-            <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 flex items-start space-x-3">
-              <div className="p-2 bg-amber-100 text-amber-800 rounded-lg">
-                <Wrench className="w-5 h-5" />
+                      {/* Tarjeta del Evento */}
+                      <div className="bg-slate-50 hover:bg-slate-100/70 p-3.5 rounded-xl border border-slate-200 transition-colors">
+                        <div className="flex items-center justify-between gap-2 mb-1">
+                          <span className="font-bold text-slate-800 text-xs">{ev.titulo}</span>
+                          <span
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold ${ev.badge.color}`}
+                          >
+                            {ev.badge.texto}
+                          </span>
+                        </div>
+
+                        <p className="font-semibold text-emerald-800 text-[11px]">{ev.subtitulo}</p>
+                        <p className="text-slate-600 text-[11px] mt-1 leading-relaxed">{ev.detalle}</p>
+
+                        <div className="mt-2 pt-2 border-t border-slate-200/60 flex flex-wrap items-center justify-between text-[10px] text-slate-400 gap-2">
+                          <span className="text-slate-600 font-medium">{ev.responsable}</span>
+                          <span className="font-mono">{formatFecha(ev.fecha)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-              <div>
-                <h4 className="font-bold text-slate-800">
-                  Hoja de Vida Técnica y Mantenimientos (Fase 3)
-                </h4>
-                <p className="text-slate-600 mt-1 leading-relaxed">
-                  Las órdenes de servicio preventivo, cambios de repuestos y soporte técnico
-                  correctivo se registrarán en la hoja de vida inmutable de este bien.
-                </p>
-              </div>
-            </div>
+            )}
           </div>
         )}
 

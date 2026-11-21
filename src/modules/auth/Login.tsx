@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { GraduationCap, Lock, Mail, Eye, EyeOff, AlertCircle, CheckCircle2, ShieldCheck } from 'lucide-react';
+import { Lock, Mail, Eye, EyeOff, AlertCircle, CheckCircle2, ShieldCheck } from 'lucide-react';
 import { useAuth } from '@/hooks';
 
 export const Login: React.FC = () => {
@@ -66,8 +66,12 @@ export const Login: React.FC = () => {
       <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden">
         {/* Cabecera Institucional */}
         <div className="bg-slate-900 px-8 py-7 text-center relative border-b border-emerald-900/30">
-          <div className="inline-flex p-3 bg-emerald-600 rounded-xl text-white shadow-lg mb-3">
-            <GraduationCap className="w-8 h-8" />
+          <div className="w-20 h-20 bg-white p-1.5 rounded-2xl shadow-md mx-auto mb-3 flex items-center justify-center">
+            <img
+              src="/logo-mamm.jpg"
+              alt="Insignia MAMM"
+              className="w-full h-full object-contain"
+            />
           </div>
           <h1 className="text-xl font-bold text-white tracking-wide">SIGI-AIP MAMM</h1>
           <p className="text-xs text-emerald-400 font-medium mt-1">

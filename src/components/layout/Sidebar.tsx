@@ -8,7 +8,6 @@ import {
   Wrench,
   FileSpreadsheet,
   Settings,
-  GraduationCap,
   Wifi,
   WifiOff,
   LogOut,
@@ -50,14 +49,18 @@ export const Sidebar: React.FC = () => {
       {/* Encabezado Institucional */}
       <div className="p-5 border-b border-slate-800">
         <div className="flex items-center space-x-3">
-          <div className="p-2 bg-emerald-600 rounded-lg text-white shadow-md">
-            <GraduationCap className="w-6 h-6" />
+          <div className="w-11 h-11 bg-white p-1 rounded-xl shadow-sm shrink-0 flex items-center justify-center">
+            <img
+              src="/logo-mamm.jpg"
+              alt="Insignia MAMM"
+              className="w-full h-full object-contain"
+            />
           </div>
-          <div>
-            <h1 className="font-bold text-base leading-tight tracking-wide text-white">
+          <div className="min-w-0">
+            <h1 className="font-bold text-base leading-tight tracking-wide text-white truncate">
               SIGI-AIP MAMM
             </h1>
-            <p className="text-xs text-slate-400">I.E. M. A. Mesones Muro</p>
+            <p className="text-xs text-slate-400 truncate">I.E. M. A. Mesones Muro</p>
           </div>
         </div>
         <div className="mt-3 text-[11px] font-medium text-emerald-400 bg-emerald-950/60 border border-emerald-800/60 px-2 py-0.5 rounded flex items-center justify-between">
