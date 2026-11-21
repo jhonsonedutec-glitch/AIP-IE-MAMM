@@ -57,13 +57,40 @@ export interface IConfiguracionRepository {
   obtenerUsuario(uid: string): Promise<UsuarioPerfil | null>;
 }
 
+export interface OperadorInfo {
+  uid?: string;
+  email?: string;
+}
+
 export interface IBienRepository {
+  listar(): Promise<BienPatrimonial[]>;
   listarTodos(): Promise<BienPatrimonial[]>;
   obtenerPorId(id: string): Promise<BienPatrimonial | null>;
+  buscarPorCodigo(codigo: string): Promise<BienPatrimonial | null>;
   obtenerPorCodigo(codigo: string): Promise<BienPatrimonial | null>;
-  crear(bien: Omit<BienPatrimonial, 'id' | 'fecha_registro' | 'actualizado_en'>): Promise<string>;
-  actualizar(id: string, bien: Partial<BienPatrimonial>): Promise<void>;
-  bajaLogica(id: string, motivo: string): Promise<void>;
+  crear(
+    bien: Omit<BienPatrimonial, 'id' | 'fecha_registro' | 'actualizado_en'>,
+    usuarioOperador?: OperadorInfo
+  ): Promise<string>;
+  actualizar(
+    id: string,
+    cambios: Partial<BienPatrimonial>,
+    usuarioOperador?: OperadorInfo
+  ): Promise<void>;
+  darDeBaja(
+    id: string,
+    motivo: string,
+    usuarioOperador?: OperadorInfo
+  ): Promise<void>;
+  bajaLogica(
+    id: string,
+    motivo: string,
+    usuarioOperador?: OperadorInfo
+  ): Promise<void>;
+  importarLote(
+    bienes: Array<Omit<BienPatrimonial, 'id' | 'fecha_registro' | 'actualizado_en'>>,
+    usuarioOperador?: OperadorInfo
+  ): Promise<{ insertados: number; omitidos: number; fallidos: number }>;
 }
 
 export interface IPrestamoRepository {

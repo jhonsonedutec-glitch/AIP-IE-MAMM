@@ -64,12 +64,15 @@ export interface BienPatrimonial {
   estado_conservacion: EstadoConservacion;
   estado_operativo: EstadoOperativo;
   ambiente_id: string;
+  ubicacion_detalle?: string;
   estacion_grupo?: string;
   etiqueta_interna?: string;
   observacion?: string;
   bloque_id?: string;
   codigo_qr: string;
   total_prestamos: number;
+  motivo_baja?: string;
+  fecha_baja?: string | Date;
   fecha_registro: string | Date;
   actualizado_en: string | Date;
 }

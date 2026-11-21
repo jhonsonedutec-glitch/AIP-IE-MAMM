@@ -2,7 +2,7 @@ rules_version = '2';
 
 // ===============================================================
 // SIGI-AIP MAMM - Reglas de Seguridad de Cloud Firestore
-// FASE 1: Matriz RBAC (Role-Based Access Control) y Políticas de Acceso
+// FASE 2: Matriz RBAC, Control Granular de Mutabilidad y Políticas de Acceso
 // ===============================================================
 //
 // DESCRIPCIÓN GENERAL:
@@ -18,8 +18,8 @@ rules_version = '2';
 //    - DIRECCION: Perfil directivo con permisos de visualización y supervisión de auditoría.
 //    - USUARIO ACTIVO: Lectura de catálogos e inventarios institucionales y registro de logs.
 // 3. Integridad y Trazabilidad:
-//    - Prohibido el borrado físico (hard delete) en colecciones operativas y de inventario.
-//    - Logs de auditoría e historiales de movimientos estrictamente inmutables.
+//    - Prohibido el borrado físico (hard delete) en colecciones operativas, maestras y de inventario.
+//    - Logs de auditoría e historiales de movimientos estrictamente inmutables (sin edición ni borrado).
 //
 // ===============================================================
 
@@ -80,28 +80,34 @@ service cloud.firestore {
     // 2. Colección de Configuración
     // Parámetros y metadatos globales del sistema.
     // - Lectura: Todos los usuarios activos.
-    // - Escritura: Exclusiva para administradores.
+    // - Creación/Actualización: Exclusiva para administradores.
+    // - Eliminación: Prohibido borrado físico (garantizar soft-delete y evitar borrado accidental).
     match /configuracion/{docId} {
       allow read: if isActiveUser();
-      allow write: if isAdmin();
+      allow create, update: if isAdmin();
+      allow delete: if false; // Garantizar soft-delete y evitar borrado físico accidental
     }
 
     // 3. Colección de Ambientes
     // Registro de espacios físicos, aulas de innovación y laboratorios.
     // - Lectura: Todos los usuarios activos.
-    // - Escritura: Exclusiva para administradores.
+    // - Creación/Actualización: Exclusiva para administradores.
+    // - Eliminación: Prohibido borrado físico (garantizar soft-delete y evitar borrado accidental).
     match /ambientes/{docId} {
       allow read: if isActiveUser();
-      allow write: if isAdmin();
+      allow create, update: if isAdmin();
+      allow delete: if false; // Garantizar soft-delete y evitar borrado físico accidental
     }
 
     // 4. Colección de Categorías de Equipo
     // Taxonomía y clasificación de equipos y bienes tecnológicos.
     // - Lectura: Todos los usuarios activos.
-    // - Escritura: Exclusiva para administradores.
+    // - Creación/Actualización: Exclusiva para administradores.
+    // - Eliminación: Prohibido borrado físico (garantizar soft-delete y evitar borrado accidental).
     match /categorias_equipo/{docId} {
       allow read: if isActiveUser();
-      allow write: if isAdmin();
+      allow create, update: if isAdmin();
+      allow delete: if false; // Garantizar soft-delete y evitar borrado físico accidental
     }
 
     // 5. Colección de Bienes
@@ -118,12 +124,12 @@ service cloud.firestore {
     // 6. Colección de Movimientos
     // Registro histórico de traslados de bienes entre ambientes.
     // - Lectura: Todos los usuarios activos.
-    // - Creación/Actualización: Exclusiva para administradores.
-    // - Eliminación: Prohibido borrado físico (historial inmutable de traslados).
+    // - Creación: Exclusiva para administradores.
+    // - Actualización/Eliminación: Prohibido (historial inmutable de traslados).
     match /movimientos/{docId} {
       allow read: if isActiveUser();
-      allow create, update: if isAdmin();
-      allow delete: if false; // Historial inmutable de traslados
+      allow create: if isAdmin();
+      allow update, delete: if false; // Historial de traslados inmutable
     }
 
     // 7. Colección de Mantenimientos

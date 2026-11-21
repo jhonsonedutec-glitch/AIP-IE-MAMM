@@ -6,14 +6,14 @@ export const Header: React.FC = () => {
   const { perfil, logout } = useAuth();
 
   return (
-    <header className="h-16 bg-white border-b border-slate-200 px-6 flex items-center justify-between shrink-0 shadow-xs">
-      <div className="flex items-center space-x-3">
-        <School className="w-5 h-5 text-emerald-700" />
-        <div>
-          <span className="font-semibold text-slate-800 text-sm">
+    <header className="h-16 bg-white border-b border-slate-200 px-4 sm:px-6 flex items-center justify-between shrink-0 shadow-xs gap-3">
+      <div className="flex items-center space-x-3 min-w-0 flex-1">
+        <School className="w-5 h-5 text-emerald-700 shrink-0" />
+        <div className="min-w-0 truncate">
+          <span className="font-semibold text-slate-800 text-sm truncate whitespace-nowrap inline-block max-w-[220px] sm:max-w-none">
             I.E. Emblemática Manuel Antonio Mesones Muro
           </span>
-          <span className="text-xs text-slate-500 ml-2 border-l border-slate-300 pl-2">
+          <span className="hidden md:inline text-xs text-slate-500 ml-2 border-l border-slate-300 pl-2 whitespace-nowrap">
             UGEL Bagua – DRE Amazonas
           </span>
         </div>

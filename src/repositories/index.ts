@@ -1,31 +1,22 @@
 import {
-  IBienRepository,
   IPrestamoRepository,
   IMantenimientoRepository,
   IMovimientoRepository,
   IDocenteRepository,
 } from './interfaces';
 
-// Importación de repositorios reales de Fase 1
+// Importación de repositorios reales de Fase 1 y Fase 2
 import { configuracionRepository } from './firestore/FirestoreConfiguracionRepository';
 import { ambienteRepository } from './firestore/FirestoreAmbienteRepository';
 import { categoriaRepository } from './firestore/FirestoreCategoriaRepository';
 import { usuarioRepository } from './firestore/FirestoreUsuarioRepository';
 import { auditoriaRepository } from './firestore/FirestoreAuditoriaRepository';
+import { bienRepository } from './firestore/FirestoreBienRepository';
 
 /**
- * Implementación esqueleto para los módulos de Fases 2 a 6.
+ * Implementación esqueleto para los módulos de Fases 3 a 6.
  * En cada fase subsiguiente se reemplazarán por adaptadores desacoplados de Firestore.
  */
-class BienRepositoryEsqueleto implements IBienRepository {
-  async listarTodos() { return []; }
-  async obtenerPorId() { return null; }
-  async obtenerPorCodigo() { return null; }
-  async crear() { return ''; }
-  async actualizar() {}
-  async bajaLogica() {}
-}
-
 class PrestamoRepositoryEsqueleto implements IPrestamoRepository {
   async listarActivos() { return []; }
   async listarHistorial() { return []; }
@@ -57,9 +48,9 @@ export {
   categoriaRepository,
   usuarioRepository,
   auditoriaRepository,
+  bienRepository,
 };
 
-export const bienRepository: IBienRepository = new BienRepositoryEsqueleto();
 export const prestamoRepository: IPrestamoRepository = new PrestamoRepositoryEsqueleto();
 export const mantenimientoRepository: IMantenimientoRepository = new MantenimientoRepositoryEsqueleto();
 export const movimientoRepository: IMovimientoRepository = new MovimientoRepositoryEsqueleto();
