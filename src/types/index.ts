@@ -33,6 +33,7 @@ export interface UsuarioPerfil {
   activo: boolean;
   creado_en: string | Date;
   ultimo_acceso?: string | Date;
+  ultimoAcceso?: string | Date;
 }
 
 export interface Ambiente {

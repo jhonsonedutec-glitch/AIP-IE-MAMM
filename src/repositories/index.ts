@@ -1,122 +1,68 @@
 import {
   IBienRepository,
   IPrestamoRepository,
-  IAmbienteRepository,
-  ICategoriaRepository,
   IMantenimientoRepository,
   IMovimientoRepository,
   IDocenteRepository,
-  IConfiguracionRepository,
 } from './interfaces';
 
-/**
- * Implementación esqueleto base para Firestore.
- * En las Fases 1-6 se implementarán los métodos con llamadas desacopladas.
- * Esta capa garantiza que si la institución migra a un servidor local (Fase Híbrida B),
- * solo se sustituirá este adaptador sin tocar vistas ni componentes de negocio.
- */
+// Importación de repositorios reales de Fase 1
+import { configuracionRepository } from './firestore/FirestoreConfiguracionRepository';
+import { ambienteRepository } from './firestore/FirestoreAmbienteRepository';
+import { categoriaRepository } from './firestore/FirestoreCategoriaRepository';
+import { usuarioRepository } from './firestore/FirestoreUsuarioRepository';
+import { auditoriaRepository } from './firestore/FirestoreAuditoriaRepository';
 
-class BienRepositoryFirebase implements IBienRepository {
-  async listarTodos() {
-    return [];
-  }
-  async obtenerPorId() {
-    return null;
-  }
-  async obtenerPorCodigo() {
-    return null;
-  }
-  async crear() {
-    return '';
-  }
+/**
+ * Implementación esqueleto para los módulos de Fases 2 a 6.
+ * En cada fase subsiguiente se reemplazarán por adaptadores desacoplados de Firestore.
+ */
+class BienRepositoryEsqueleto implements IBienRepository {
+  async listarTodos() { return []; }
+  async obtenerPorId() { return null; }
+  async obtenerPorCodigo() { return null; }
+  async crear() { return ''; }
   async actualizar() {}
   async bajaLogica() {}
 }
 
-class PrestamoRepositoryFirebase implements IPrestamoRepository {
-  async listarActivos() {
-    return [];
-  }
-  async listarHistorial() {
-    return [];
-  }
-  async obtenerPorId() {
-    return null;
-  }
-  async registrarSalida() {
-    return '';
-  }
+class PrestamoRepositoryEsqueleto implements IPrestamoRepository {
+  async listarActivos() { return []; }
+  async listarHistorial() { return []; }
+  async obtenerPorId() { return null; }
+  async registrarSalida() { return ''; }
   async registrarDevolucion() {}
 }
 
-class AmbienteRepositoryFirebase implements IAmbienteRepository {
-  async listar() {
-    return [];
-  }
-  async obtenerPorId() {
-    return null;
-  }
-  async crear() {
-    return '';
-  }
-  async actualizar() {}
-}
-
-class CategoriaRepositoryFirebase implements ICategoriaRepository {
-  async listar() {
-    return [];
-  }
-  async crear() {
-    return '';
-  }
-}
-
-class MantenimientoRepositoryFirebase implements IMantenimientoRepository {
-  async listar() {
-    return [];
-  }
-  async registrar() {
-    return '';
-  }
+class MantenimientoRepositoryEsqueleto implements IMantenimientoRepository {
+  async listar() { return []; }
+  async registrar() { return ''; }
   async cerrar() {}
 }
 
-class MovimientoRepositoryFirebase implements IMovimientoRepository {
-  async listarPorBien() {
-    return [];
-  }
-  async registrarTraslado() {
-    return '';
-  }
+class MovimientoRepositoryEsqueleto implements IMovimientoRepository {
+  async listarPorBien() { return []; }
+  async registrarTraslado() { return ''; }
 }
 
-class DocenteRepositoryFirebase implements IDocenteRepository {
-  async listarDocentes() {
-    return [];
-  }
-  async listarAreas() {
-    return [];
-  }
+class DocenteRepositoryEsqueleto implements IDocenteRepository {
+  async listarDocentes() { return []; }
+  async listarAreas() { return []; }
 }
 
-class ConfiguracionRepositoryFirebase implements IConfiguracionRepository {
-  async obtenerInstitucion() {
-    return null;
-  }
-  async actualizarInstitucion() {}
-  async obtenerUsuario() {
-    return null;
-  }
-}
+// Exportación de instancias desacopladas
+export {
+  configuracionRepository,
+  ambienteRepository,
+  categoriaRepository,
+  usuarioRepository,
+  auditoriaRepository,
+};
 
-// Instancias exportadas como Singletons desacoplados
-export const bienRepository: IBienRepository = new BienRepositoryFirebase();
-export const prestamoRepository: IPrestamoRepository = new PrestamoRepositoryFirebase();
-export const ambienteRepository: IAmbienteRepository = new AmbienteRepositoryFirebase();
-export const categoriaRepository: ICategoriaRepository = new CategoriaRepositoryFirebase();
-export const mantenimientoRepository: IMantenimientoRepository = new MantenimientoRepositoryFirebase();
-export const movimientoRepository: IMovimientoRepository = new MovimientoRepositoryFirebase();
-export const docenteRepository: IDocenteRepository = new DocenteRepositoryFirebase();
-export const configuracionRepository: IConfiguracionRepository = new ConfiguracionRepositoryFirebase();
+export const bienRepository: IBienRepository = new BienRepositoryEsqueleto();
+export const prestamoRepository: IPrestamoRepository = new PrestamoRepositoryEsqueleto();
+export const mantenimientoRepository: IMantenimientoRepository = new MantenimientoRepositoryEsqueleto();
+export const movimientoRepository: IMovimientoRepository = new MovimientoRepositoryEsqueleto();
+export const docenteRepository: IDocenteRepository = new DocenteRepositoryEsqueleto();
 
 export * from './interfaces';

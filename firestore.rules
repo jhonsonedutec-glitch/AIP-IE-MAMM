@@ -2,33 +2,211 @@ rules_version = '2';
 
 // ===============================================================
 // SIGI-AIP MAMM - Reglas de Seguridad de Cloud Firestore
-// FASE 0: Cimientos del Proyecto (Cerrojo de Seguridad Inicial)
+// FASE 1: Matriz RBAC (Role-Based Access Control) y Políticas de Acceso
 // ===============================================================
 //
-// DESCRIPCIÓN:
-// Este archivo establece el cerrojo de seguridad inicial para la Fase 0 del
-// Sistema de Información y Gestión Institucional (SIGI-AIP MAMM).
+// DESCRIPCIÓN GENERAL:
+// Este conjunto de reglas implementa el modelo de control de acceso basado
+// en roles (RBAC) para el Sistema Integrado de Gestión Institucional
+// del Aula de Innovación Pedagógica (SIGI-AIP MAMM).
 //
-// POLÍTICA: DEFAULT DENY (Denegación Total por Defecto)
-// Todas las operaciones de lectura (get, list) y escritura (create, update, delete)
-// se encuentran estrictamente bloqueadas en todas las colecciones y documentos.
+// POLÍTICAS GENERALES:
+// 1. Acceso autenticado estricto: Todo acceso requiere autenticación activa
+//    y un registro de usuario válido y activo en la colección /usuarios.
+// 2. Control de Roles (RBAC):
+//    - ADMIN: Acceso de escritura total sobre catálogos, inventarios y configuración.
+//    - DIRECCION: Perfil directivo con permisos de visualización y supervisión de auditoría.
+//    - USUARIO ACTIVO: Lectura de catálogos e inventarios institucionales y registro de logs.
+// 3. Integridad y Trazabilidad:
+//    - Prohibido el borrado físico (hard delete) en colecciones operativas y de inventario.
+//    - Logs de auditoría e historiales de movimientos estrictamente inmutables.
 //
-// TRANSICIÓN A FASE 1:
-// En la Fase 1 se implementará la matriz RBAC (Role-Based Access Control)
-// para los roles autorizados (ADMIN / DIRECCION), junto con los validadores de esquema
-// e invariantes de integridad de datos requeridos por las entidades del sistema.
-//
-// ===============================================================
-// Modelo de Datos y Accesos Previstos (Fase 1):
-// ===============================================================
-// - Usuarios y Roles (RBAC: ADMIN / DIRECCION)
-// - Colecciones institucionales y registros operacionales
 // ===============================================================
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Cerrojo de seguridad Fase 0: Bloquear toda lectura y escritura por defecto
+    // ===============================================================
+    // Funciones Auxiliares de Autenticación y Autorización (RBAC)
+    // ===============================================================
+
+    // Verifica que la solicitud provenga de un usuario autenticado en Firebase Auth
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Comprueba si existe el documento de perfil del usuario en la colección 'usuarios'
+    function userExists() {
+      return exists(/databases/$(database)/documents/usuarios/$(request.auth.uid));
+    }
+
+    // Obtiene los datos del documento de perfil del usuario solicitante
+    function userDoc() {
+      return get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data;
+    }
+
+    // Valida que el usuario esté autenticado, exista en el sistema y mantenga estado activo
+    function isActiveUser() {
+      return isAuthenticated() && userExists() && userDoc().activo == true;
+    }
+
+    // Valida que el usuario activo posea el rol de Administrador ('ADMIN')
+    function isAdmin() {
+      return isActiveUser() && userDoc().rol == 'ADMIN';
+    }
+
+    // Valida que el usuario activo posea el rol de Dirección ('DIRECCION')
+    function isDireccion() {
+      return isActiveUser() && userDoc().rol == 'DIRECCION';
+    }
+
+    // ===============================================================
+    // Reglas Específicas por Colección
+    // ===============================================================
+
+    // 1. Colección de Usuarios
+    // Gestiona las cuentas y roles del personal del AIP.
+    // - Lectura: El propio usuario o administradores.
+    // - Creación: Exclusiva para administradores.
+    // - Actualización: Administradores o el propio usuario solo para actualizar 'ultimoAcceso'.
+    // - Eliminación: Prohibido borrado físico (soft-delete vía campo 'activo').
+    match /usuarios/{userId} {
+      allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      allow create: if isAdmin();
+      allow update: if isAdmin() || (isActiveUser() && request.auth.uid == userId && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ultimoAcceso']));
+      allow delete: if false; // Prohibido borrado físico
+    }
+
+    // 2. Colección de Configuración
+    // Parámetros y metadatos globales del sistema.
+    // - Lectura: Todos los usuarios activos.
+    // - Escritura: Exclusiva para administradores.
+    match /configuracion/{docId} {
+      allow read: if isActiveUser();
+      allow write: if isAdmin();
+    }
+
+    // 3. Colección de Ambientes
+    // Registro de espacios físicos, aulas de innovación y laboratorios.
+    // - Lectura: Todos los usuarios activos.
+    // - Escritura: Exclusiva para administradores.
+    match /ambientes/{docId} {
+      allow read: if isActiveUser();
+      allow write: if isAdmin();
+    }
+
+    // 4. Colección de Categorías de Equipo
+    // Taxonomía y clasificación de equipos y bienes tecnológicos.
+    // - Lectura: Todos los usuarios activos.
+    // - Escritura: Exclusiva para administradores.
+    match /categorias_equipo/{docId} {
+      allow read: if isActiveUser();
+      allow write: if isAdmin();
+    }
+
+    // 5. Colección de Bienes
+    // Inventario patrimonial de bienes y equipos tecnológicos.
+    // - Lectura: Todos los usuarios activos.
+    // - Creación/Actualización: Exclusiva para administradores.
+    // - Eliminación: Prohibido borrado físico (trazabilidad y bajas lógicas).
+    match /bienes/{docId} {
+      allow read: if isActiveUser();
+      allow create, update: if isAdmin();
+      allow delete: if false; // Prohibido borrado físico
+    }
+
+    // 6. Colección de Movimientos
+    // Registro histórico de traslados de bienes entre ambientes.
+    // - Lectura: Todos los usuarios activos.
+    // - Creación/Actualización: Exclusiva para administradores.
+    // - Eliminación: Prohibido borrado físico (historial inmutable de traslados).
+    match /movimientos/{docId} {
+      allow read: if isActiveUser();
+      allow create, update: if isAdmin();
+      allow delete: if false; // Historial inmutable de traslados
+    }
+
+    // 7. Colección de Mantenimientos
+    // Registro de servicios técnicos, preventivos y correctivos de equipos.
+    // - Lectura: Todos los usuarios activos.
+    // - Creación/Actualización: Exclusiva para administradores.
+    // - Eliminación: Prohibido borrado físico.
+    match /mantenimientos/{docId} {
+      allow read: if isActiveUser();
+      allow create, update: if isAdmin();
+      allow delete: if false;
+    }
+
+    // 8. Colección de Docentes
+    // Padrón de docentes que hacen uso del aula y sus recursos.
+    // - Lectura: Todos los usuarios activos.
+    // - Creación/Actualización: Exclusiva para administradores.
+    // - Eliminación: Prohibido borrado físico.
+    match /docentes/{docId} {
+      allow read: if isActiveUser();
+      allow create, update: if isAdmin();
+      allow delete: if false;
+    }
+
+    // 9. Colección de Áreas Curriculares
+    // Estructura de materias y áreas pedagógicas institucionales.
+    // - Lectura: Todos los usuarios activos.
+    // - Creación/Actualización: Exclusiva para administradores.
+    // - Eliminación: Prohibido borrado físico.
+    match /areas_curriculares/{docId} {
+      allow read: if isActiveUser();
+      allow create, update: if isAdmin();
+      allow delete: if false;
+    }
+
+    // 10. Colección de Bloques de Equipos
+    // Grupos y asignaciones de conjuntos de equipos para sesiones de aprendizaje.
+    // - Lectura: Todos los usuarios activos.
+    // - Creación/Actualización: Exclusiva para administradores.
+    // - Eliminación: Prohibido borrado físico.
+    match /bloques_equipos/{docId} {
+      allow read: if isActiveUser();
+      allow create, update: if isAdmin();
+      allow delete: if false;
+    }
+
+    // 11. Colección de Bloques
+    // Módulos horarios y turnos de atención pedagógica del aula.
+    // - Lectura: Todos los usuarios activos.
+    // - Creación/Actualización: Exclusiva para administradores.
+    // - Eliminación: Prohibido borrado físico.
+    match /bloques/{docId} {
+      allow read: if isActiveUser();
+      allow create, update: if isAdmin();
+      allow delete: if false;
+    }
+
+    // 12. Colección de Préstamos
+    // Control de circulación y asignación temporal de equipos.
+    // - Lectura: Todos los usuarios activos.
+    // - Creación/Actualización: Exclusiva para administradores.
+    // - Eliminación: Prohibido borrado físico.
+    match /prestamos/{docId} {
+      allow read: if isActiveUser();
+      allow create, update: if isAdmin();
+      allow delete: if false;
+    }
+
+    // 13. Colección de Auditoría (Logs)
+    // Trazabilidad de operaciones críticas del sistema.
+    // - Lectura: Administradores y Dirección institucional.
+    // - Creación: Permitida para usuarios activos al registrar eventos.
+    // - Actualización/Eliminación: Estrictamente prohibido (logs inmutables).
+    match /auditoria_logs/{docId} {
+      allow read: if isAdmin() || isDireccion();
+      allow create: if isActiveUser();
+      allow update, delete: if false; // Logs inmutables
+    }
+
+    // ---------------------------------------------------------------
+    // Denegación por Defecto (Default Deny)
+    // Bloqueo explícito para cualquier ruta o subcolección no declarada
+    // ---------------------------------------------------------------
     match /{document=**} {
       allow read, write: if false;
     }

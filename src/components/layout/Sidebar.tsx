@@ -11,13 +11,16 @@ import {
   GraduationCap,
   Wifi,
   WifiOff,
+  LogOut,
+  UserCheck,
 } from 'lucide-react';
-import { useOnlineStatus } from '@/hooks';
+import { useOnlineStatus, useAuth } from '@/hooks';
 
 interface NavItem {
   name: string;
   to: string;
   icon: React.ComponentType<{ className?: string }>;
+  adminOnly?: boolean;
 }
 
 const navItems: NavItem[] = [
@@ -27,11 +30,20 @@ const navItems: NavItem[] = [
   { name: 'Préstamos QR', to: '/prestamos', icon: QrCode },
   { name: 'Mantenimiento', to: '/mantenimiento', icon: Wrench },
   { name: 'Reportes y Backups', to: '/reportes', icon: FileSpreadsheet },
-  { name: 'Configuración', to: '/configuracion', icon: Settings },
+  { name: 'Configuración', to: '/configuracion', icon: Settings, adminOnly: true },
 ];
 
 export const Sidebar: React.FC = () => {
   const isOnline = useOnlineStatus();
+  const { perfil, logout } = useAuth();
+
+  // Filtrar módulos según RBAC: ocultar Configuración si no es ADMIN
+  const visibleItems = navItems.filter((item) => {
+    if (item.adminOnly) {
+      return perfil?.rol === 'ADMIN';
+    }
+    return true;
+  });
 
   return (
     <aside className="w-64 bg-slate-900 text-slate-200 flex flex-col border-r border-slate-800 shrink-0 select-none">
@@ -50,7 +62,9 @@ export const Sidebar: React.FC = () => {
         </div>
         <div className="mt-3 text-[11px] font-medium text-emerald-400 bg-emerald-950/60 border border-emerald-800/60 px-2 py-0.5 rounded flex items-center justify-between">
           <span>Nivel Secundaria - Bagua</span>
-          <span className="text-[10px] text-slate-400">Fase 0</span>
+          <span className="text-[10px] text-slate-300">
+            {perfil?.rol === 'ADMIN' ? 'Admin AIP' : 'Dirección'}
+          </span>
         </div>
       </div>
 
@@ -59,7 +73,7 @@ export const Sidebar: React.FC = () => {
         <div className="px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
           Módulos Principales
         </div>
-        {navItems.map((item) => {
+        {visibleItems.map((item) => {
           const Icon = item.icon;
           return (
             <NavLink
@@ -80,25 +94,46 @@ export const Sidebar: React.FC = () => {
         })}
       </nav>
 
-      {/* Indicador de Estado de Conexión Online / Offline */}
-      <div className="p-4 border-t border-slate-800 bg-slate-950/40">
-        <div className="flex items-center justify-between text-xs">
-          <span className="text-slate-400 font-medium">Estado Red:</span>
+      {/* Perfil del Usuario y Cerrar Sesión */}
+      <div className="p-3 border-t border-slate-800 bg-slate-950/60">
+        <div className="flex items-center justify-between px-2 py-2 mb-2 rounded-lg bg-slate-900 border border-slate-800">
+          <div className="flex items-center space-x-2.5 overflow-hidden">
+            <div className="w-7 h-7 rounded-full bg-emerald-600/30 border border-emerald-500/50 flex items-center justify-center text-emerald-400 shrink-0">
+              <UserCheck className="w-3.5 h-3.5" />
+            </div>
+            <div className="truncate">
+              <p className="text-xs font-semibold text-white truncate">
+                {perfil?.nombres || perfil?.email || 'Usuario'}
+              </p>
+              <p className="text-[10px] text-emerald-400 font-medium">
+                {perfil?.rol === 'ADMIN' ? 'Administrador AIP' : 'Equipo Directivo'}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => logout()}
+            title="Cerrar Sesión"
+            className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-rose-950/30 rounded-md transition-colors"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Indicador de Red */}
+        <div className="flex items-center justify-between text-xs px-2 py-1">
+          <span className="text-slate-400 text-[11px]">Conexión:</span>
           {isOnline ? (
-            <span className="inline-flex items-center text-emerald-400 font-semibold bg-emerald-950/60 px-2 py-1 rounded-full border border-emerald-800/80">
-              <Wifi className="w-3.5 h-3.5 mr-1.5 animate-pulse text-emerald-400" />
+            <span className="inline-flex items-center text-emerald-400 text-[11px] font-semibold">
+              <Wifi className="w-3 h-3 mr-1 text-emerald-400" />
               En línea
             </span>
           ) : (
-            <span className="inline-flex items-center text-amber-400 font-semibold bg-amber-950/60 px-2 py-1 rounded-full border border-amber-800/80">
-              <WifiOff className="w-3.5 h-3.5 mr-1.5 text-amber-400" />
-              Modo sin conexión
+            <span className="inline-flex items-center text-amber-400 text-[11px] font-semibold">
+              <WifiOff className="w-3 h-3 mr-1 text-amber-400" />
+              Sin conexión
             </span>
           )}
         </div>
-        <p className="text-[10px] text-slate-500 mt-2 text-center">
-          Persistencia offline nativa activa
-        </p>
       </div>
     </aside>
   );
