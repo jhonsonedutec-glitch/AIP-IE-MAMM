@@ -1,0 +1,36 @@
+rules_version = '2';
+
+// ===============================================================
+// SIGI-AIP MAMM - Reglas de Seguridad de Cloud Firestore
+// FASE 0: Cimientos del Proyecto (Cerrojo de Seguridad Inicial)
+// ===============================================================
+//
+// DESCRIPCIÓN:
+// Este archivo establece el cerrojo de seguridad inicial para la Fase 0 del
+// Sistema de Información y Gestión Institucional (SIGI-AIP MAMM).
+//
+// POLÍTICA: DEFAULT DENY (Denegación Total por Defecto)
+// Todas las operaciones de lectura (get, list) y escritura (create, update, delete)
+// se encuentran estrictamente bloqueadas en todas las colecciones y documentos.
+//
+// TRANSICIÓN A FASE 1:
+// En la Fase 1 se implementará la matriz RBAC (Role-Based Access Control)
+// para los roles autorizados (ADMIN / DIRECCION), junto con los validadores de esquema
+// e invariantes de integridad de datos requeridos por las entidades del sistema.
+//
+// ===============================================================
+// Modelo de Datos y Accesos Previstos (Fase 1):
+// ===============================================================
+// - Usuarios y Roles (RBAC: ADMIN / DIRECCION)
+// - Colecciones institucionales y registros operacionales
+// ===============================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Cerrojo de seguridad Fase 0: Bloquear toda lectura y escritura por defecto
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

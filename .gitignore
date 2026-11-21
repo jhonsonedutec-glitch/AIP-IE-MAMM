@@ -1,0 +1,46 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Node / Dependencias
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# Firebase
+.firebase/
+firebase-debug.log*
+firestore-debug.log*
+ui-debug.log*
+
+# Secretos y Entornos (Estricto)
+.env
+.env.local
+.env.*.local
+serviceAccountKey.json
+*.key.json
+*.pem
+
+# Archivos de Inventario y Respaldos Reales (Protección de Datos Personales / Inventario Real)
+*.xlsx
+*.xls
+*.csv
+backups/*.json
+backup/*.json
+
+# Editor / SO
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
