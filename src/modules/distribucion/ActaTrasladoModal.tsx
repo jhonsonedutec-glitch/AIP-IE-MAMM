@@ -37,6 +37,13 @@ export const ActaTrasladoModal: React.FC<ActaTrasladoModalProps> = ({
 
   const codigoActa = primerMov.lote_id || `ACTA-IND-${primerMov.id.slice(0, 8).toUpperCase()}`;
 
+  const dreTexto = (dre || '').trim().toUpperCase().startsWith('DRE')
+    ? dre
+    : `DRE ${dre || 'Amazonas'}`;
+  const ugelTexto = (ugel || '').trim().toUpperCase().startsWith('UGEL')
+    ? ugel
+    : `UGEL ${ugel || 'Bagua'}`;
+
   const formatFecha = (f?: string | Date) => {
     if (!f) return new Date().toLocaleDateString('es-PE');
     try {
@@ -92,9 +99,23 @@ export const ActaTrasladoModal: React.FC<ActaTrasladoModalProps> = ({
 
         {/* Hoja Imprimible Oficial */}
         <div className="overflow-y-auto p-6 sm:p-10 flex-1 bg-slate-100 print:bg-white print:p-0">
+          <style>{`
+            @media print {
+              @page {
+                size: A4;
+                margin: 0;
+              }
+              body {
+                margin: 0;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+              }
+            }
+          `}</style>
+
           <div
             ref={printRef}
-            className="max-w-[210mm] mx-auto bg-white p-8 sm:p-12 shadow-md print:shadow-none border border-slate-200 print:border-none text-slate-900 font-sans text-xs leading-relaxed"
+            className="max-w-[210mm] mx-auto bg-white p-8 sm:p-12 print:p-[14mm] print:m-0 print:w-full print:max-w-none shadow-md print:shadow-none border border-slate-200 print:border-none text-slate-900 font-sans text-xs leading-relaxed"
           >
             {/* Encabezado Oficial */}
             <div className="border-b-2 border-slate-800 pb-4 mb-6">
@@ -108,9 +129,9 @@ export const ActaTrasladoModal: React.FC<ActaTrasladoModalProps> = ({
                 </div>
                 <div className="text-center flex-1">
                   <h4 className="text-[11px] font-bold tracking-wider text-slate-600 uppercase">
-                    Ministerio de Educación – {dre}
+                    Ministerio de Educación – {dreTexto}
                   </h4>
-                  <h3 className="text-xs font-bold text-slate-700 uppercase">{ugel}</h3>
+                  <h3 className="text-xs font-bold text-slate-700 uppercase">{ugelTexto}</h3>
                   <h2 className="text-sm sm:text-base font-extrabold text-slate-900 uppercase tracking-tight mt-0.5">
                     {institucionNombre}
                   </h2>
@@ -118,9 +139,11 @@ export const ActaTrasladoModal: React.FC<ActaTrasladoModalProps> = ({
                     Aula de Innovación Pedagógica (AIP) – Gestión de Recursos Tecnológicos
                   </p>
                 </div>
-                <div className="w-16 h-16 sm:w-20 sm:h-20 shrink-0 flex flex-col items-center justify-center border border-slate-300 rounded p-1 text-center bg-slate-50">
-                  <span className="text-[9px] font-bold text-slate-500 uppercase">CÓDIGO ACTA</span>
-                  <span className="text-[10px] font-mono font-bold text-slate-800 mt-0.5 break-all">
+                <div className="w-24 h-16 sm:w-28 sm:h-20 shrink-0 flex flex-col items-center justify-center border border-slate-300 rounded p-1 text-center bg-slate-50 whitespace-nowrap">
+                  <span className="text-[9px] font-bold text-slate-500 uppercase whitespace-nowrap">
+                    CÓDIGO ACTA
+                  </span>
+                  <span className="text-[10px] font-mono font-bold text-slate-800 mt-0.5 whitespace-nowrap">
                     {codigoActa.replace('ACTA-', '')}
                   </span>
                 </div>
@@ -238,7 +261,7 @@ export const ActaTrasladoModal: React.FC<ActaTrasladoModalProps> = ({
             <div className="grid grid-cols-3 gap-6 pt-10 text-center text-xs">
               <div>
                 <div className="border-t border-slate-700 w-4/5 mx-auto pt-2">
-                  <p className="font-bold text-slate-800 leading-tight">
+                  <p className="font-bold text-slate-800 leading-tight uppercase">
                     {primerMov.responsable_entrega || 'Responsable AIP'}
                   </p>
                   <p className="text-[10px] text-slate-500 uppercase mt-0.5">Entrega Conforme</p>
@@ -247,7 +270,7 @@ export const ActaTrasladoModal: React.FC<ActaTrasladoModalProps> = ({
               </div>
               <div>
                 <div className="border-t border-slate-700 w-4/5 mx-auto pt-2">
-                  <p className="font-bold text-slate-800 leading-tight">
+                  <p className="font-bold text-slate-800 leading-tight uppercase">
                     {primerMov.responsable_recepcion || 'Receptor Responsable'}
                   </p>
                   <p className="text-[10px] text-slate-500 uppercase mt-0.5">Recibe Conforme</p>
@@ -256,7 +279,7 @@ export const ActaTrasladoModal: React.FC<ActaTrasladoModalProps> = ({
               </div>
               <div>
                 <div className="border-t border-slate-700 w-4/5 mx-auto pt-2">
-                  <p className="font-bold text-slate-800 leading-tight">Dirección General</p>
+                  <p className="font-bold text-slate-800 leading-tight uppercase">Dirección General</p>
                   <p className="text-[10px] text-slate-500 uppercase mt-0.5">V° B° Dirección</p>
                   <p className="text-[9px] text-slate-400">I.E. M. A. Mesones Muro</p>
                 </div>

@@ -30,6 +30,12 @@ export default defineConfig({
           if (id.includes('node_modules/lucide-react')) {
             return 'vendor-lucide';
           }
+          if (
+            id.includes('node_modules/qrcode') ||
+            id.includes('node_modules/html5-qrcode')
+          ) {
+            return 'vendor-qr';
+          }
         },
       },
     },

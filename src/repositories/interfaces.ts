@@ -7,6 +7,7 @@ import {
   MovimientoBien,
   Docente,
   AreaCurricular,
+  BloqueEquipos,
   InstitucionConfig,
   UsuarioPerfil,
   AuditoriaLog,
@@ -94,17 +95,31 @@ export interface IBienRepository {
 }
 
 export interface IPrestamoRepository {
+  listar(): Promise<Prestamo[]>;
   listarActivos(): Promise<Prestamo[]>;
   listarHistorial(limite?: number): Promise<Prestamo[]>;
+  listarPorBien(bienId: string): Promise<Prestamo[]>;
   obtenerPorId(id: string): Promise<Prestamo | null>;
-  registrarSalida(prestamo: Omit<Prestamo, 'id'>): Promise<string>;
+  registrarPrestamo(
+    prestamo: Omit<Prestamo, 'id'>,
+    usuarioOperador?: OperadorInfo
+  ): Promise<string>;
   registrarDevolucion(
-    id: string,
-    fechaReal: string | Date,
-    estado: 'DEVUELTO' | 'CON_INCIDENCIA',
-    observacion?: string,
-    usuarioRecepcionId?: string
+    prestamoId: string,
+    cierre: {
+      fechaReal?: string | Date;
+      estado: 'DEVUELTO' | 'CON_INCIDENCIA';
+      observacion?: string;
+      equiposRetorno?: Array<{
+        bien_id: string;
+        estadoOperativo: BienPatrimonial['estado_operativo'];
+        estadoConservacion?: BienPatrimonial['estado_conservacion'];
+        observacionIncidencia?: string;
+      }>;
+    },
+    usuarioOperador?: OperadorInfo
   ): Promise<void>;
+  registrarSalida?(prestamo: Omit<Prestamo, 'id'>): Promise<string>;
 }
 
 export interface IMantenimientoRepository {
@@ -160,6 +175,32 @@ export interface IMovimientoRepository {
 }
 
 export interface IDocenteRepository {
+  listar(): Promise<Docente[]>;
+  listarActivos(): Promise<Docente[]>;
   listarDocentes(): Promise<Docente[]>;
-  listarAreas(): Promise<AreaCurricular[]>;
+  obtenerPorId(id: string): Promise<Docente | null>;
+  obtenerPorDni(dni: string): Promise<Docente | null>;
+  crear(docente: Omit<Docente, 'id'>, usuarioOperador?: OperadorInfo): Promise<string>;
+  actualizar(id: string, cambios: Partial<Docente>, usuarioOperador?: OperadorInfo): Promise<void>;
+  desactivar(id: string, usuarioOperador?: OperadorInfo): Promise<void>;
+  listarAreas?(): Promise<AreaCurricular[]>;
+}
+
+export interface IAreaCurricularRepository {
+  listar(): Promise<AreaCurricular[]>;
+  listarActivas(): Promise<AreaCurricular[]>;
+  obtenerPorId(id: string): Promise<AreaCurricular | null>;
+  crear(area: Omit<AreaCurricular, 'id'>, usuarioOperador?: OperadorInfo): Promise<string>;
+  actualizar(id: string, cambios: Partial<AreaCurricular>, usuarioOperador?: OperadorInfo): Promise<void>;
+  desactivar(id: string, usuarioOperador?: OperadorInfo): Promise<void>;
+  inicializarAreasBase(usuarioOperador?: OperadorInfo): Promise<number>;
+}
+
+export interface IBloqueRepository {
+  listar(): Promise<BloqueEquipos[]>;
+  listarActivos(): Promise<BloqueEquipos[]>;
+  obtenerPorId(id: string): Promise<BloqueEquipos | null>;
+  crear(bloque: Omit<BloqueEquipos, 'id'>, usuarioOperador?: OperadorInfo): Promise<string>;
+  actualizar(id: string, cambios: Partial<BloqueEquipos>, usuarioOperador?: OperadorInfo): Promise<void>;
+  desactivar(id: string, usuarioOperador?: OperadorInfo): Promise<void>;
 }

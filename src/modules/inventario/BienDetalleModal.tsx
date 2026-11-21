@@ -17,8 +17,13 @@ import {
   CategoriaEquipo,
   MovimientoBien,
   MantenimientoRegistro,
+  Prestamo,
 } from '@/types';
-import { movimientoRepository, mantenimientoRepository } from '@/repositories';
+import {
+  movimientoRepository,
+  mantenimientoRepository,
+  prestamoRepository,
+} from '@/repositories';
 
 interface BienDetalleModalProps {
   bien: BienPatrimonial;
@@ -31,7 +36,7 @@ interface BienDetalleModalProps {
 
 interface EventoTimeline {
   id: string;
-  tipo: 'TRASLADO' | 'MANTENIMIENTO';
+  tipo: 'TRASLADO' | 'MANTENIMIENTO' | 'PRESTAMO';
   fecha: Date;
   titulo: string;
   subtitulo: string;
@@ -52,6 +57,7 @@ export const BienDetalleModal: React.FC<BienDetalleModalProps> = ({
 
   const [movimientos, setMovimientos] = useState<MovimientoBien[]>([]);
   const [mantenimientos, setMantenimientos] = useState<MantenimientoRegistro[]>([]);
+  const [prestamos, setPrestamos] = useState<Prestamo[]>([]);
   const [cargandoHistorial, setCargandoHistorial] = useState(false);
 
   useEffect(() => {
@@ -59,13 +65,15 @@ export const BienDetalleModal: React.FC<BienDetalleModalProps> = ({
     const cargarTrazabilidad = async () => {
       setCargandoHistorial(true);
       try {
-        const [movs, mants] = await Promise.all([
+        const [movs, mants, prests] = await Promise.all([
           movimientoRepository.listarPorBien(bien.id),
           mantenimientoRepository.listarPorBien(bien.id),
+          prestamoRepository.listarPorBien(bien.id),
         ]);
         if (activo) {
           setMovimientos(movs);
           setMantenimientos(mants);
+          setPrestamos(prests);
         }
       } catch (err) {
         console.error('Error al cargar historial del bien:', err);
@@ -182,6 +190,39 @@ export const BienDetalleModal: React.FC<BienDetalleModalProps> = ({
             mt.tipo === 'CORRECTIVO'
               ? 'bg-rose-100 text-rose-800'
               : 'bg-blue-100 text-blue-800',
+        },
+      };
+    }),
+    ...prestamos.map((p) => {
+      const esDevuelto = p.estado === 'DEVUELTO' || p.estado === 'CON_INCIDENCIA';
+      return {
+        id: `prest-${p.id}`,
+        tipo: 'PRESTAMO' as const,
+        fecha: new Date(p.fecha_salida),
+        titulo: `Préstamo Pedagógico ${esDevuelto ? '(Devuelto)' : '(En Curso)'}`,
+        subtitulo: `Docente: ${p.docente_nombre} | Área: ${p.area_nombre} (${p.grado_seccion})`,
+        detalle: `Ambiente de uso: ${p.ambiente_uso}.${
+          p.accesorios_entregados ? ` Accesorios: ${p.accesorios_entregados}.` : ''
+        }${p.observacion_retorno ? ` Observación retorno: ${p.observacion_retorno}` : ''}`,
+        responsable:
+          esDevuelto && p.fecha_devolucion_real
+            ? `Retornado el ${formatFecha(p.fecha_devolucion_real)} (${
+                p.estado === 'CON_INCIDENCIA' ? 'Con Incidencia' : 'Conforme'
+              })`
+            : `Retorno estimado: ${formatFecha(p.fecha_devolucion_estimada)}`,
+        badge: {
+          texto:
+            p.estado === 'ACTIVO'
+              ? 'En Uso'
+              : p.estado === 'DEVUELTO'
+              ? 'Devuelto'
+              : 'Incidencia',
+          color:
+            p.estado === 'ACTIVO'
+              ? 'bg-amber-100 text-amber-800'
+              : p.estado === 'DEVUELTO'
+              ? 'bg-indigo-100 text-indigo-800'
+              : 'bg-rose-100 text-rose-800',
         },
       };
     }),
@@ -382,25 +423,32 @@ export const BienDetalleModal: React.FC<BienDetalleModalProps> = ({
                 <History className="w-8 h-8 text-slate-300 mx-auto mb-2" />
                 <p className="font-semibold text-slate-700">Sin historial registrado aún</p>
                 <p className="text-[11px] text-slate-400 mt-1">
-                  Este bien no registra traslados ni órdenes de soporte técnico hasta el momento.
+                  Este bien no registra traslados, mantenimientos ni préstamos pedagógicos hasta el momento.
                 </p>
               </div>
             ) : (
               <div className="relative pl-6 space-y-6 before:absolute before:left-2.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-200">
                 {eventosTimeline.map((ev) => {
                   const esTraslado = ev.tipo === 'TRASLADO';
+                  const esMantenimiento = ev.tipo === 'MANTENIMIENTO';
                   return (
                     <div key={ev.id} className="relative group">
                       {/* Nodo icono en la línea */}
                       <div
                         className={`absolute -left-6 top-0 w-5 h-5 rounded-full flex items-center justify-center text-white ring-4 ring-white shadow-xs ${
-                          esTraslado ? 'bg-emerald-600' : 'bg-amber-600'
+                          esTraslado
+                            ? 'bg-emerald-600'
+                            : esMantenimiento
+                            ? 'bg-amber-600'
+                            : 'bg-indigo-600'
                         }`}
                       >
                         {esTraslado ? (
                           <ArrowLeftRight className="w-3 h-3" />
-                        ) : (
+                        ) : esMantenimiento ? (
                           <Wrench className="w-3 h-3" />
+                        ) : (
+                          <QrCode className="w-3 h-3" />
                         )}
                       </div>
 

@@ -61,6 +61,8 @@ export interface BienPatrimonial {
   modelo: string;
   color: string;
   serie: string;
+  numero_serie?: string;
+  activo?: boolean;
   estado_conservacion: EstadoConservacion;
   estado_operativo: EstadoOperativo;
   ambiente_id: string;
@@ -125,10 +127,21 @@ export interface Docente {
   id: string;
   dni: string;
   nombres_apellidos: string;
-  area_principal_id: string;
-  celular: string;
+  nombres?: string;
+  apellidos?: string;
+  especialidad?: string;
+  area_principal_id?: string;
+  celular?: string;
+  telefono?: string;
+  email?: string;
   activo: boolean;
 }
+
+export type BloqueEquipo = BloqueEquipos;
+export type Bien = BienPatrimonial;
+export type EstadoOperativoBien = EstadoOperativo;
+export type EstadoConservacionBien = EstadoConservacion;
+export type ConfiguracionSistema = InstitucionConfig;
 
 export interface AreaCurricular {
   id: string;
@@ -140,7 +153,7 @@ export interface BloqueEquipos {
   id: string;
   nombre: string;
   descripcion: string;
-  codigo_qr_lote: string;
+  codigo_qr_lote?: string;
   bienes_ids: string[];
   activo: boolean;
 }
@@ -182,7 +195,16 @@ export interface AuditoriaLog {
   id: string;
   usuario_id: string;
   usuario_email: string;
-  accion: 'CREATE' | 'UPDATE' | 'TRASLADO' | 'BAJA' | 'IMPORT' | 'BACKUP_RESTORE' | 'USER_CHANGE';
+  accion:
+    | 'CREATE'
+    | 'UPDATE'
+    | 'TRASLADO'
+    | 'BAJA'
+    | 'IMPORT'
+    | 'BACKUP_RESTORE'
+    | 'USER_CHANGE'
+    | 'PRESTAMO'
+    | 'DEVOLUCION';
   coleccion: string;
   documento_id: string;
   detalle: string;
