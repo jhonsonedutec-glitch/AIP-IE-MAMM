@@ -681,26 +681,33 @@ export async function generarExcelConciliacionInventario(
   const t1 = wsResumen.getCell('B1');
   t1.value = 'GOBIERNO REGIONAL DE AMAZONAS';
   t1.font = { name: 'Calibri', size: 9, bold: true, color: { argb: 'FF475569' } };
+  t1.alignment = { vertical: 'middle' };
 
   wsResumen.mergeCells('B2:D2');
   const t2 = wsResumen.getCell('B2');
   t2.value = `DIRECCIÓN REGIONAL DE EDUCACIÓN - DRE ${dre}  |  UGEL ${ugel}`;
   t2.font = { name: 'Calibri', size: 9, bold: true, color: { argb: 'FF334155' } };
+  t2.alignment = { vertical: 'middle' };
 
   wsResumen.mergeCells('B3:D3');
   const t3 = wsResumen.getCell('B3');
   t3.value = `I.E. "${nombreIe}"  •  NIVEL ${nivel}  •  ${lugar} - ${distrito}`;
   t3.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FF0F172A' } };
+  t3.alignment = { vertical: 'middle', wrapText: true };
+  wsResumen.getRow(3).height = 24;
 
   wsResumen.mergeCells('B4:D4');
   const t4 = wsResumen.getCell('B4');
   t4.value = 'INFORME DE VERIFICACIÓN FÍSICA Y CONCILIACIÓN DE INVENTARIO QR';
   t4.font = { name: 'Calibri', size: 12, bold: true, color: { argb: 'FF065F46' } };
+  t4.alignment = { vertical: 'middle', wrapText: true };
+  wsResumen.getRow(4).height = 24;
 
   wsResumen.mergeCells('B5:D5');
   const t5 = wsResumen.getCell('B5');
   t5.value = `ACTA OFICIAL: ${verificacion.codigo_acta}  |  EMISIÓN: ${new Date().toLocaleDateString('es-PE')} ${new Date().toLocaleTimeString('es-PE')}`;
   t5.font = { name: 'Calibri', size: 8.5, color: { argb: 'FF64748B' } };
+  t5.alignment = { vertical: 'middle' };
 
   for (let c = 1; c <= 4; c++) {
     wsResumen.getCell(5, c).border = { bottom: { style: 'medium', color: { argb: 'FF065F46' } } };
@@ -709,10 +716,10 @@ export async function generarExcelConciliacionInventario(
   // Tabla de Metadatos
   wsResumen.getRow(6).height = 10;
   wsResumen.columns = [
-    { key: 'c1', width: 28 },
-    { key: 'c2', width: 34 },
-    { key: 'c3', width: 22 },
-    { key: 'c4', width: 22 },
+    { key: 'c1', width: 30 },
+    { key: 'c2', width: 44 },
+    { key: 'c3', width: 24 },
+    { key: 'c4', width: 30 },
   ];
 
   const metaData = [
@@ -761,13 +768,50 @@ export async function generarExcelConciliacionInventario(
   wsResumen.getRow(rIdx).height = 24;
   rIdx++;
 
+  const totalEsp = verificacion.total_esperados || 0;
+  const cantConf = verificacion.total_conformes ?? verificacion.total_verificados_conforme ?? 0;
+  const cantJust = verificacion.total_ausentes_justificados || 0;
+  const cantFalt = verificacion.total_faltantes || 0;
+  const cantFuer = verificacion.total_fuera_ubicacion || 0;
+  const cantDesc = verificacion.total_desconocidos || 0;
+
   const categoriasConciliacion = [
-    { cat: 'TOTAL UNIVERSO ESPERADO', cant: verificacion.total_esperados, color: 'FF0F172A', pct: '100%' },
-    { cat: '1. VERIFICADOS CONFORMES', cant: verificacion.total_conformes, color: 'FF166534', pct: `${verificacion.porcentaje_conformidad}%` },
-    { cat: '2. AUSENTES JUSTIFICADOS (Préstamo / Mantenimiento)', cant: verificacion.total_ausentes_justificados, color: 'FF1E40AF', pct: `${verificacion.total_esperados > 0 ? Math.round((verificacion.total_ausentes_justificados / verificacion.total_esperados) * 100) : 0}%` },
-    { cat: '3. FALTANTES (No hallados en aula)', cant: verificacion.total_faltantes, color: 'FF991B1B', pct: `${verificacion.total_esperados > 0 ? Math.round((verificacion.total_faltantes / verificacion.total_esperados) * 100) : 0}%` },
-    { cat: '4. FUERA DE UBICACIÓN (En otro ambiente / De baja)', cant: verificacion.total_fuera_ubicacion, color: 'FF92400E', pct: '—' },
-    { cat: '5. DESCONOCIDOS (Código no existe en BD)', cant: verificacion.total_desconocidos, color: 'FF6B21A8', pct: '—' },
+    {
+      cat: 'TOTAL UNIVERSO ESPERADO',
+      cant: totalEsp,
+      color: 'FF0F172A',
+      pctVal: totalEsp > 0 ? 1.0 : 0,
+    },
+    {
+      cat: '1. VERIFICADOS CONFORMES',
+      cant: cantConf,
+      color: 'FF166534',
+      pctVal: totalEsp > 0 ? cantConf / totalEsp : 0,
+    },
+    {
+      cat: '2. AUSENTES JUSTIFICADOS (Préstamo / Mantenimiento)',
+      cant: cantJust,
+      color: 'FF1E40AF',
+      pctVal: totalEsp > 0 ? cantJust / totalEsp : 0,
+    },
+    {
+      cat: '3. FALTANTES (No hallados en aula)',
+      cant: cantFalt,
+      color: 'FF991B1B',
+      pctVal: totalEsp > 0 ? cantFalt / totalEsp : 0,
+    },
+    {
+      cat: '4. FUERA DE UBICACIÓN (En otro ambiente / De baja)',
+      cant: cantFuer,
+      color: 'FF92400E',
+      pctVal: totalEsp > 0 ? cantFuer / totalEsp : 0,
+    },
+    {
+      cat: '5. DESCONOCIDOS (Código no existe en BD)',
+      cant: cantDesc,
+      color: 'FF6B21A8',
+      pctVal: totalEsp > 0 ? cantDesc / totalEsp : 0,
+    },
   ];
 
   categoriasConciliacion.forEach((c) => {
@@ -779,12 +823,14 @@ export async function generarExcelConciliacionInventario(
     const cellPct = row.getCell(4);
     cellCat.value = c.cat;
     cellCant.value = c.cant;
-    cellPct.value = c.pct;
+    cellCant.numFmt = '#,##0';
+    cellPct.value = c.pctVal;
+    cellPct.numFmt = '0.00%';
     cellCat.font = { name: 'Calibri', size: 9, bold: true, color: { argb: c.color } };
     cellCant.font = { name: 'Calibri', size: 10, bold: true, color: { argb: c.color } };
-    cellCant.alignment = { horizontal: 'center' };
-    cellPct.font = { name: 'Calibri', size: 9, bold: true, color: { argb: 'FF475569' } };
-    cellPct.alignment = { horizontal: 'center' };
+    cellCant.alignment = { horizontal: 'center', vertical: 'middle' };
+    cellPct.font = { name: 'Calibri', size: 9.5, bold: true, color: { argb: 'FF334155' } };
+    cellPct.alignment = { horizontal: 'center', vertical: 'middle' };
     const bdr = {
       top: { style: 'thin' as const, color: { argb: 'FFE2E8F0' } },
       bottom: { style: 'thin' as const, color: { argb: 'FFE2E8F0' } },
