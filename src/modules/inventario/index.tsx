@@ -71,6 +71,7 @@ export const InventarioModule: React.FC = () => {
 
   const [modalBajaOpen, setModalBajaOpen] = useState(false);
   const [bienParaBaja, setBienParaBaja] = useState<BienPatrimonial | null>(null);
+  const [bienConflictoReactivar, setBienConflictoReactivar] = useState<BienPatrimonial | null>(null);
 
   const [modalImportarOpen, setModalImportarOpen] = useState(false);
 
@@ -328,6 +329,7 @@ export const InventarioModule: React.FC = () => {
     if (!confirmar) return;
 
     try {
+      setBienConflictoReactivar(null);
       const operador = user ? { uid: user.uid, email: user.email || '' } : undefined;
       await bienRepository.reactivar(bien.id, operador);
       await cargarDatos();
@@ -337,6 +339,7 @@ export const InventarioModule: React.FC = () => {
       });
     } catch (err: any) {
       console.error('Error al reactivar bien:', err);
+      setBienConflictoReactivar(bien);
       setFeedback({
         tipo: 'err',
         msg: err.message || 'No se pudo reactivar el bien patrimonial.',
@@ -461,18 +464,34 @@ export const InventarioModule: React.FC = () => {
 
       {feedback && (
         <div
-          className={`p-3.5 rounded-xl border text-xs flex items-center space-x-2.5 ${
+          className={`p-3.5 rounded-xl border text-xs flex items-center justify-between gap-3 ${
             feedback.tipo === 'ok'
               ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
               : 'bg-rose-50 border-rose-200 text-rose-800'
           }`}
         >
-          {feedback.tipo === 'ok' ? (
-            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-          ) : (
-            <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+          <div className="flex items-center space-x-2.5">
+            {feedback.tipo === 'ok' ? (
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            ) : (
+              <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+            )}
+            <span className="font-medium">{feedback.msg}</span>
+          </div>
+          {feedback.tipo === 'err' && bienConflictoReactivar && (
+            <button
+              type="button"
+              onClick={() => {
+                setBienParaEditar(bienConflictoReactivar);
+                setModalFormOpen(true);
+                setFeedback(null);
+                setBienConflictoReactivar(null);
+              }}
+              className="shrink-0 px-3 py-1.5 bg-rose-700 hover:bg-rose-800 text-white font-bold text-xs rounded-lg shadow-xs transition-colors cursor-pointer"
+            >
+              Editar Código / Serie
+            </button>
           )}
-          <span className="font-medium">{feedback.msg}</span>
         </div>
       )}
 
