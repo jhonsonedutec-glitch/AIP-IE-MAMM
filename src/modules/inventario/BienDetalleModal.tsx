@@ -10,6 +10,7 @@ import {
   Wrench,
   ArrowLeftRight,
   Clock,
+  RotateCcw,
 } from 'lucide-react';
 import {
   BienPatrimonial,
@@ -31,6 +32,7 @@ interface BienDetalleModalProps {
   categorias: CategoriaEquipo[];
   onClose: () => void;
   onEdit?: () => void;
+  onReactivar?: () => void;
   canEdit?: boolean;
 }
 
@@ -51,6 +53,7 @@ export const BienDetalleModal: React.FC<BienDetalleModalProps> = ({
   categorias,
   onClose,
   onEdit,
+  onReactivar,
   canEdit = false,
 }) => {
   const [tab, setTab] = useState<'ficha' | 'historial'>('ficha');
@@ -446,13 +449,43 @@ export const BienDetalleModal: React.FC<BienDetalleModalProps> = ({
 
             {/* Información de Baja si aplica */}
             {bien.estado_operativo === 'DE_BAJA' && (
-              <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-900">
-                <span className="font-bold block text-xs">Registro de Baja Patrimonial:</span>
-                <p className="mt-1">
-                  <strong>Motivo:</strong> {bien.motivo_baja || 'No especificado'}
-                </p>
-                <p className="text-[11px] text-rose-700 mt-0.5">
-                  Fecha de baja: {formatFecha(bien.fecha_baja)}
+              <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl text-rose-900 space-y-2.5">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <span className="font-bold block text-xs text-rose-950">Registro de Baja Patrimonial Lógica:</span>
+                    <p className="mt-1 text-xs">
+                      <strong>Motivo:</strong> {bien.motivo_baja || 'No especificado'}
+                    </p>
+                    <p className="text-[11px] text-rose-700 mt-0.5">
+                      Fecha de baja: {formatFecha(bien.fecha_baja)}
+                    </p>
+                  </div>
+                  {canEdit && onReactivar && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onClose();
+                        onReactivar();
+                      }}
+                      className="shrink-0 inline-flex items-center space-x-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg shadow-xs transition-colors cursor-pointer"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      <span>Reactivar a Operativo</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Información de Mantenimiento si aplica */}
+            {bien.estado_operativo === 'EN_MANTENIMIENTO' && (
+              <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 space-y-1">
+                <div className="flex items-center space-x-2">
+                  <Wrench className="w-4 h-4 text-amber-700 shrink-0" />
+                  <span className="font-bold text-xs text-amber-950">Atención Técnica en Curso (Mantenimiento)</span>
+                </div>
+                <p className="text-[11px] text-amber-800 leading-relaxed">
+                  Este equipo está en soporte técnico. Para devolverlo a <strong>OPERATIVO</strong>, finaliza la orden en el módulo de <strong>Mantenimiento</strong> o edita su ficha seleccionando OPERATIVO y estado de conservación Bueno.
                 </p>
               </div>
             )}
@@ -531,6 +564,19 @@ export const BienDetalleModal: React.FC<BienDetalleModalProps> = ({
         <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
           <span className="text-[11px] text-slate-400 font-mono">ID: {bien.id}</span>
           <div className="flex items-center space-x-2">
+            {canEdit && onReactivar && bien.estado_operativo === 'DE_BAJA' && (
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onReactivar();
+                }}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs rounded-lg transition-colors inline-flex items-center space-x-1.5 shadow-xs cursor-pointer"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Reactivar Bien</span>
+              </button>
+            )}
             {canEdit && onEdit && (
               <button
                 type="button"

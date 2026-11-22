@@ -919,6 +919,13 @@ export const BienFormModal: React.FC<BienFormModalProps> = ({
             />
           </div>
 
+          {error && (
+            <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-start space-x-2 text-rose-800 text-xs">
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+              <span className="font-medium leading-relaxed">{error}</span>
+            </div>
+          )}
+
           <div className="flex items-center justify-end space-x-2 pt-3 border-t border-slate-100">
             <button
               type="button"

@@ -5,6 +5,7 @@ import {
   getDocs,
   setDoc,
   updateDoc,
+  deleteField,
   query,
   where,
   orderBy,
@@ -167,7 +168,7 @@ export class FirestoreBienRepository implements IBienRepository {
         const itemCodNorm = normalizarCodigoPatrimonial(data.codigo_patrimonial);
         if (itemCodNorm && itemCodNorm === normCod) {
           throw new Error(
-            `Ya existe un bien activo registrado con el código patrimonial "${codigoPatrimonial}" (Coincide con "${data.codigo_patrimonial}" en [${data.etiqueta_interna || 'S/E'}] ${data.denominacion || 'Equipo'}).`
+            `Conflicto de duplicado: Ya existe un bien activo registrado con el código patrimonial "${codigoPatrimonial}" (Coincide con [${data.etiqueta_interna || 'S/E'}] ${data.denominacion || 'Equipo'}). Si es un equipo físico distinto, modifique su código patrimonial antes de activarlo.`
           );
         }
       }
@@ -176,7 +177,7 @@ export class FirestoreBienRepository implements IBienRepository {
         const itemSerieNorm = normalizarSerie(data.serie);
         if (itemSerieNorm && itemSerieNorm === normSerie) {
           throw new Error(
-            `Ya existe un bien activo registrado con el número de serie "${serie}" (Coincide con "${data.serie}" en [${data.etiqueta_interna || 'S/E'}] ${data.denominacion || 'Equipo'}).`
+            `Conflicto de duplicado: Ya existe un bien activo registrado con el número de serie "${serie}" (Coincide con [${data.etiqueta_interna || 'S/E'}] ${data.denominacion || 'Equipo'}). Si es un equipo físico distinto, modifique su número de serie antes de activarlo.`
           );
         }
       }
@@ -272,6 +273,10 @@ export class FirestoreBienRepository implements IBienRepository {
     if (cambios.lote_color !== undefined) {
       rawUpdate.lote_color = cambios.lote_color?.trim() || '';
     }
+    if (cambios.estado_operativo === 'OPERATIVO') {
+      rawUpdate.motivo_baja = deleteField();
+      rawUpdate.fecha_baja = deleteField();
+    }
 
     const dataToUpdate = limpiarUndefined(rawUpdate);
     await updateDoc(docTarget, dataToUpdate);
@@ -319,6 +324,34 @@ export class FirestoreBienRepository implements IBienRepository {
 
   async bajaLogica(id: string, motivo: string, operador?: OperadorInfo): Promise<void> {
     return this.darDeBaja(id, motivo, operador);
+  }
+
+  async reactivar(id: string, operador?: OperadorInfo): Promise<void> {
+    const actual = await this.obtenerPorId(id);
+    if (!actual) throw new Error('El bien patrimonial no existe.');
+
+    // Validar unicidad frente a bienes activos existentes
+    await this.validarUnicidad(actual.codigo_patrimonial, actual.serie, id);
+
+    const docTarget = doc(this.colRef, id);
+    await updateDoc(docTarget, {
+      estado_operativo: 'OPERATIVO',
+      motivo_baja: deleteField(),
+      fecha_baja: deleteField(),
+      actualizado_en: serverTimestamp(),
+    });
+
+    const operId = operador?.uid || auth.currentUser?.uid || '';
+    const operEmail = operador?.email || auth.currentUser?.email || '';
+
+    await auditoriaRepository.registrar({
+      usuario_id: operId,
+      usuario_email: operEmail,
+      accion: 'UPDATE',
+      coleccion: 'bienes',
+      documento_id: id,
+      detalle: `Reactivación y reincorporación a inventario activo del bien ID ${id} (${actual.etiqueta_interna || actual.codigo_patrimonial})`,
+    });
   }
 
   /**

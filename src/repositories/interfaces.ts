@@ -88,6 +88,10 @@ export interface IBienRepository {
     motivo: string,
     usuarioOperador?: OperadorInfo
   ): Promise<void>;
+  reactivar(
+    id: string,
+    usuarioOperador?: OperadorInfo
+  ): Promise<void>;
   importarLote(
     bienes: Array<Omit<BienPatrimonial, 'id' | 'fecha_registro' | 'actualizado_en'>>,
     usuarioOperador?: OperadorInfo

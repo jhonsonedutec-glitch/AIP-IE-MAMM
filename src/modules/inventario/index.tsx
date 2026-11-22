@@ -57,6 +57,7 @@ export const InventarioModule: React.FC = () => {
   const [filtroConservacion, setFiltroConservacion] = useState('');
   const [filtroOperativo, setFiltroOperativo] = useState('');
   const [filtroLote, setFiltroLote] = useState('');
+  const [filtroSoporteObservados, setFiltroSoporteObservados] = useState(false);
 
   // Paginación
   const [paginaActual, setPaginaActual] = useState(1);
@@ -150,8 +151,16 @@ export const InventarioModule: React.FC = () => {
       // 4. Filtro de Estado de Conservación
       if (filtroConservacion && b.estado_conservacion !== filtroConservacion) return false;
 
-      // 5. Filtro de Estado Operativo
-      if (filtroOperativo && b.estado_operativo !== filtroOperativo) return false;
+      // 5. Filtro de Estado Operativo o En Soporte / Observados
+      if (filtroSoporteObservados) {
+        const esObservado =
+          b.estado_operativo === 'EN_MANTENIMIENTO' ||
+          b.estado_conservacion === 'R' ||
+          b.estado_conservacion === 'M';
+        if (!esObservado) return false;
+      } else if (filtroOperativo && b.estado_operativo !== filtroOperativo) {
+        return false;
+      }
 
       // 6. Filtro de Lote
       if (filtroLote) {
@@ -167,7 +176,7 @@ export const InventarioModule: React.FC = () => {
 
     // Orden determinista: etiquetas reales naturales primero (LAP-001..LAP-080), desempate numérico por código patrimonial
     return filtrados.sort(compararBienesDeterminista);
-  }, [bienes, busqueda, filtroAmbiente, filtroCategoria, filtroConservacion, filtroOperativo, filtroLote]);
+  }, [bienes, busqueda, filtroAmbiente, filtroCategoria, filtroConservacion, filtroOperativo, filtroLote, filtroSoporteObservados]);
 
   // Detección de equipos con observación "VERDE" o "YERDE" sin lote asignado para regularización
   const bienesParaRegularizarVerde = useMemo(() => {
@@ -308,7 +317,31 @@ export const InventarioModule: React.FC = () => {
     setFiltroConservacion('');
     setFiltroOperativo('');
     setFiltroLote('');
+    setFiltroSoporteObservados(false);
     setPaginaActual(1);
+  };
+
+  const handleReactivarBien = async (bien: BienPatrimonial) => {
+    const confirmar = window.confirm(
+      `¿Deseas reactivar el equipo "${bien.etiqueta_interna || bien.codigo_patrimonial}" (${bien.denominacion}) y reincorporarlo al inventario activo como OPERATIVO?`
+    );
+    if (!confirmar) return;
+
+    try {
+      const operador = user ? { uid: user.uid, email: user.email || '' } : undefined;
+      await bienRepository.reactivar(bien.id, operador);
+      await cargarDatos();
+      setFeedback({
+        tipo: 'ok',
+        msg: `El bien "${bien.etiqueta_interna || bien.codigo_patrimonial}" fue reactivado y reincorporado con éxito al inventario activo como OPERATIVO.`,
+      });
+    } catch (err: any) {
+      console.error('Error al reactivar bien:', err);
+      setFeedback({
+        tipo: 'err',
+        msg: err.message || 'No se pudo reactivar el bien patrimonial.',
+      });
+    }
   };
 
   const abrirModalLoteRapido = (bien: BienPatrimonial) => {
@@ -443,45 +476,167 @@ export const InventarioModule: React.FC = () => {
         </div>
       )}
 
-      {/* Barra de KPIs Superiores */}
+      {/* Barra de KPIs Superiores Filtrables con Click */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
-          <span className="text-xs font-semibold text-slate-500 block">Total Bienes Activos</span>
-          <span className="text-2xl font-bold text-slate-900 mt-1 block">
+        <button
+          type="button"
+          onClick={() => {
+            setFiltroOperativo('');
+            setFiltroSoporteObservados(false);
+            setPaginaActual(1);
+          }}
+          className={`p-4 rounded-xl border text-left transition-all cursor-pointer ${
+            !filtroOperativo && !filtroSoporteObservados
+              ? 'bg-slate-900 text-white border-slate-900 shadow-md ring-2 ring-slate-400'
+              : 'bg-white hover:bg-slate-50 border-slate-200 shadow-xs'
+          }`}
+          title="Ver todos los bienes activos (excluye dados de baja)"
+        >
+          <span
+            className={`text-xs font-semibold block ${
+              !filtroOperativo && !filtroSoporteObservados ? 'text-slate-300' : 'text-slate-500'
+            }`}
+          >
+            Total Bienes Activos
+          </span>
+          <span
+            className={`text-2xl font-bold mt-1 block ${
+              !filtroOperativo && !filtroSoporteObservados ? 'text-white' : 'text-slate-900'
+            }`}
+          >
             {kpis.totalActivos}
           </span>
-          <span className="text-[10px] text-slate-400 mt-0.5 block">Excluye dados de baja</span>
-        </div>
+          <span
+            className={`text-[10px] mt-0.5 block ${
+              !filtroOperativo && !filtroSoporteObservados ? 'text-slate-300' : 'text-slate-400'
+            }`}
+          >
+            Excluye dados de baja
+          </span>
+        </button>
 
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
-          <span className="text-xs font-semibold text-emerald-700 block">
+        <button
+          type="button"
+          onClick={() => {
+            setFiltroOperativo(filtroOperativo === 'OPERATIVO' ? '' : 'OPERATIVO');
+            setFiltroSoporteObservados(false);
+            setPaginaActual(1);
+          }}
+          className={`p-4 rounded-xl border text-left transition-all cursor-pointer ${
+            filtroOperativo === 'OPERATIVO' && !filtroSoporteObservados
+              ? 'bg-emerald-700 text-white border-emerald-800 shadow-md ring-2 ring-emerald-400'
+              : 'bg-white hover:bg-emerald-50/50 border-slate-200 shadow-xs'
+          }`}
+          title="Filtrar por equipos operativos y listos para el aula"
+        >
+          <span
+            className={`text-xs font-semibold block ${
+              filtroOperativo === 'OPERATIVO' && !filtroSoporteObservados
+                ? 'text-emerald-100'
+                : 'text-emerald-700'
+            }`}
+          >
             Operativos / Disponibles
           </span>
-          <span className="text-2xl font-bold text-emerald-700 mt-1 block">
+          <span
+            className={`text-2xl font-bold mt-1 block ${
+              filtroOperativo === 'OPERATIVO' && !filtroSoporteObservados
+                ? 'text-white'
+                : 'text-emerald-700'
+            }`}
+          >
             {kpis.operativos}
           </span>
-          <span className="text-[10px] text-emerald-600/80 mt-0.5 block">Listos para el aula</span>
-        </div>
+          <span
+            className={`text-[10px] mt-0.5 block ${
+              filtroOperativo === 'OPERATIVO' && !filtroSoporteObservados
+                ? 'text-emerald-200'
+                : 'text-emerald-600/80'
+            }`}
+          >
+            Listos para el aula
+          </span>
+        </button>
 
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
-          <span className="text-xs font-semibold text-amber-700 block">
+        <button
+          type="button"
+          onClick={() => {
+            setFiltroSoporteObservados(!filtroSoporteObservados);
+            setFiltroOperativo('');
+            setPaginaActual(1);
+          }}
+          className={`p-4 rounded-xl border text-left transition-all cursor-pointer ${
+            filtroSoporteObservados
+              ? 'bg-amber-600 text-white border-amber-700 shadow-md ring-2 ring-amber-300'
+              : 'bg-white hover:bg-amber-50/50 border-slate-200 shadow-xs'
+          }`}
+          title="Filtrar por equipos en soporte técnico o con estado de conservación regular/malo"
+        >
+          <span
+            className={`text-xs font-semibold block ${
+              filtroSoporteObservados ? 'text-amber-100' : 'text-amber-700'
+            }`}
+          >
             En Soporte / Observados
           </span>
-          <span className="text-2xl font-bold text-amber-700 mt-1 block">
+          <span
+            className={`text-2xl font-bold mt-1 block ${
+              filtroSoporteObservados ? 'text-white' : 'text-amber-700'
+            }`}
+          >
             {kpis.atencion}
           </span>
-          <span className="text-[10px] text-amber-600/80 mt-0.5 block">
+          <span
+            className={`text-[10px] mt-0.5 block ${
+              filtroSoporteObservados ? 'text-amber-200' : 'text-amber-600/80'
+            }`}
+          >
             Mantenimiento o estado R/M
           </span>
-        </div>
+        </button>
 
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
-          <span className="text-xs font-semibold text-rose-700 block">Dados de Baja</span>
-          <span className="text-2xl font-bold text-rose-700 mt-1 block">
+        <button
+          type="button"
+          onClick={() => {
+            setFiltroOperativo(filtroOperativo === 'DE_BAJA' ? '' : 'DE_BAJA');
+            setFiltroSoporteObservados(false);
+            setPaginaActual(1);
+          }}
+          className={`p-4 rounded-xl border text-left transition-all cursor-pointer ${
+            filtroOperativo === 'DE_BAJA' && !filtroSoporteObservados
+              ? 'bg-rose-700 text-white border-rose-800 shadow-md ring-2 ring-rose-400'
+              : 'bg-white hover:bg-rose-50/50 border-slate-200 shadow-xs'
+          }`}
+          title="Filtrar por bienes dados de baja lógica"
+        >
+          <span
+            className={`text-xs font-semibold block ${
+              filtroOperativo === 'DE_BAJA' && !filtroSoporteObservados
+                ? 'text-rose-100'
+                : 'text-rose-700'
+            }`}
+          >
+            Dados de Baja
+          </span>
+          <span
+            className={`text-2xl font-bold mt-1 block ${
+              filtroOperativo === 'DE_BAJA' && !filtroSoporteObservados
+                ? 'text-white'
+                : 'text-rose-700'
+            }`}
+          >
             {kpis.deBaja}
           </span>
-          <span className="text-[10px] text-rose-600/80 mt-0.5 block">Bajas patrimoniales</span>
-        </div>
+          <span
+            className={`text-[10px] mt-0.5 block ${
+              filtroOperativo === 'DE_BAJA' && !filtroSoporteObservados
+                ? 'text-rose-200'
+                : 'text-rose-600/80'
+            }`}
+          >
+            Bajas patrimoniales
+          </span>
+        </button>
       </div>
 
       {/* Barra de Búsqueda y Filtros Combinables */}
@@ -843,7 +998,16 @@ export const InventarioModule: React.FC = () => {
                           >
                             <Edit2 className="w-4 h-4" />
                           </button>
-                          {b.estado_operativo !== 'DE_BAJA' && (
+                          {b.estado_operativo === 'DE_BAJA' ? (
+                            <button
+                              type="button"
+                              onClick={() => handleReactivarBien(b)}
+                              className="p-1.5 text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50 rounded-md transition-colors"
+                              title="Reactivar y Reincorporar a Inventario Activo (OPERATIVO)"
+                            >
+                              <RotateCcw className="w-4 h-4" />
+                            </button>
+                          ) : (
                             <button
                               type="button"
                               onClick={() => {
@@ -931,6 +1095,7 @@ export const InventarioModule: React.FC = () => {
             setBienParaEditar(bienParaDetalle);
             setModalFormOpen(true);
           }}
+          onReactivar={() => handleReactivarBien(bienParaDetalle)}
         />
       )}
 
