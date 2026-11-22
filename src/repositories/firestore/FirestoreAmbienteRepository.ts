@@ -14,13 +14,13 @@ import { IAmbienteRepository } from '../interfaces';
 import { auditoriaRepository } from './FirestoreAuditoriaRepository';
 
 export const AMBIENTES_BASE: Omit<Ambiente, 'id'>[] = [
-  { nombre: 'AIP 1', encargado: 'Responsable AIP 1', descripcion: 'Aula de Innovación Pedagógica 1', activo: true },
-  { nombre: 'AIP 2', encargado: 'Responsable AIP 2', descripcion: 'Aula de Innovación Pedagógica 2', activo: true },
-  { nombre: 'Secretaría de Dirección', encargado: 'Secretaría General', descripcion: 'Oficina de Dirección', activo: true },
-  { nombre: 'Secretaría Subdirección', encargado: 'Subdirección Pedagógica', descripcion: 'Oficina de Subdirección', activo: true },
-  { nombre: 'Psicología', encargado: 'Psicólogo Escolar', descripcion: 'Consultorio de Psicología Escolar', activo: true },
-  { nombre: 'TOE', encargado: 'Coordinador(a) TOE', descripcion: 'Tutoría y Orientación Educativa', activo: true },
-  { nombre: 'Otros', encargado: 'General', descripcion: 'Otros ambientes institucionales', activo: true },
+  { nombre: 'AIP 1', encargado: 'Responsable AIP 1', descripcion: 'Aula de Innovación Pedagógica 1', activo: true, permite_prestamo: true },
+  { nombre: 'AIP 2', encargado: 'Responsable AIP 2', descripcion: 'Aula de Innovación Pedagógica 2', activo: true, permite_prestamo: true },
+  { nombre: 'Secretaría de Dirección', encargado: 'Secretaría General', descripcion: 'Oficina de Dirección', activo: true, permite_prestamo: false },
+  { nombre: 'Secretaría Subdirección', encargado: 'Subdirección Pedagógica', descripcion: 'Oficina de Subdirección', activo: true, permite_prestamo: false },
+  { nombre: 'Psicología', encargado: 'Psicólogo Escolar', descripcion: 'Consultorio de Psicología Escolar', activo: true, permite_prestamo: false },
+  { nombre: 'TOE', encargado: 'Coordinador(a) TOE', descripcion: 'Tutoría y Orientación Educativa', activo: true, permite_prestamo: false },
+  { nombre: 'Otros', encargado: 'General', descripcion: 'Otros ambientes institucionales', activo: true, permite_prestamo: false },
 ];
 
 export class FirestoreAmbienteRepository implements IAmbienteRepository {
@@ -29,24 +29,30 @@ export class FirestoreAmbienteRepository implements IAmbienteRepository {
   async listar(): Promise<Ambiente[]> {
     const q = query(this.colRef, orderBy('nombre', 'asc'));
     const snap = await getDocs(q);
-    return snap.docs.map((d) => ({
-      id: d.id,
-      nombre: d.data().nombre || '',
-      encargado: d.data().encargado || '',
-      descripcion: d.data().descripcion || '',
-      activo: d.data().activo !== false,
-    }));
+    return snap.docs.map((d) => {
+      const data = d.data();
+      return {
+        id: d.id,
+        nombre: data.nombre || '',
+        encargado: data.encargado || '',
+        descripcion: data.descripcion || '',
+        activo: data.activo !== false,
+        permite_prestamo: typeof data.permite_prestamo === 'boolean' ? data.permite_prestamo : /aip/i.test(data.nombre || ''),
+      };
+    });
   }
 
   async obtenerPorId(id: string): Promise<Ambiente | null> {
     const snap = await getDoc(doc(this.colRef, id));
     if (!snap.exists()) return null;
+    const data = snap.data();
     return {
       id: snap.id,
-      nombre: snap.data().nombre || '',
-      encargado: snap.data().encargado || '',
-      descripcion: snap.data().descripcion || '',
-      activo: snap.data().activo !== false,
+      nombre: data.nombre || '',
+      encargado: data.encargado || '',
+      descripcion: data.descripcion || '',
+      activo: data.activo !== false,
+      permite_prestamo: typeof data.permite_prestamo === 'boolean' ? data.permite_prestamo : /aip/i.test(data.nombre || ''),
     };
   }
 

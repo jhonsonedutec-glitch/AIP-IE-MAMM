@@ -32,6 +32,7 @@ import {
   Ambiente,
   CategoriaEquipo,
   InstitucionConfig as ConfiguracionSistema,
+  esAmbientePrestable,
 } from '@/types';
 import {
   prestamoRepository,
@@ -167,18 +168,29 @@ export const PrestamosModule: React.FC = () => {
     cargarDatos();
   }, []);
 
-  // Bienes disponibles para prestar (deben ser OPERATIVO y estar activos)
-  const bienesOperativos = useMemo(() => {
-    return bienes.filter((b) => b.activo !== false && b.estado_operativo === 'OPERATIVO');
-  }, [bienes]);
+  // Ambientes pertenecientes al Stock AIP
+  const ambientesAIP = useMemo(() => {
+    return ambientes.filter((a) => esAmbientePrestable(a) && a.activo !== false);
+  }, [ambientes]);
 
-  // Equipos disponibles para el selector por cantidad (filtrados y ordenados por etiqueta interna)
+  // Bienes disponibles para prestar (deben ser OPERATIVO, activos y estar ubicados en un ambiente AIP)
+  const bienesOperativos = useMemo(() => {
+    return bienes.filter((b) => {
+      if (b.activo === false || b.estado_operativo !== 'OPERATIVO') return false;
+      const amb = ambientes.find((a) => a.id === b.ambiente_id);
+      return esAmbientePrestable(amb);
+    });
+  }, [bienes, ambientes]);
+
+  // Equipos disponibles para el selector por cantidad (filtrados, en AIP y ordenados por etiqueta interna)
   const equiposDisponiblesParaCantidad = useMemo(() => {
     const idsEnCarrito = new Set(carritoBienes.map((b) => b.id));
     return bienes
       .filter((b) => {
         if (b.activo === false) return false;
         if (b.estado_operativo !== 'OPERATIVO') return false;
+        const amb = ambientes.find((a) => a.id === b.ambiente_id);
+        if (!esAmbientePrestable(amb)) return false;
         if (idsEnCarrito.has(b.id)) return false;
         if (cantidadCategoriaFiltro !== 'TODAS' && b.categoria_id !== cantidadCategoriaFiltro) {
           return false;
@@ -193,31 +205,44 @@ export const PrestamosModule: React.FC = () => {
           numeric: true,
         })
       );
-  }, [bienes, carritoBienes, cantidadCategoriaFiltro, cantidadAmbienteFiltro]);
+  }, [bienes, ambientes, carritoBienes, cantidadCategoriaFiltro, cantidadAmbienteFiltro]);
 
-  // Equipos disponibles dentro del bloque seleccionado (no en carrito y operativos)
+  // Equipos disponibles dentro del bloque seleccionado (no en carrito, operativos y estrictamente en stock AIP)
   const equiposDisponiblesEnBloque = useMemo(() => {
     if (!bloqueSeleccionadoId) return [];
     const bloque = bloques.find((b) => b.id === bloqueSeleccionadoId);
     if (!bloque) return [];
     const idsEnCarrito = new Set(carritoBienes.map((c) => c.id));
     return bienes
-      .filter(
-        (b) =>
-          bloque.bienes_ids.includes(b.id) &&
-          b.estado_operativo === 'OPERATIVO' &&
-          b.activo !== false &&
-          !idsEnCarrito.has(b.id)
-      )
+      .filter((b) => {
+        if (!bloque.bienes_ids.includes(b.id)) return false;
+        if (b.estado_operativo !== 'OPERATIVO' || b.activo === false) return false;
+        const amb = ambientes.find((a) => a.id === b.ambiente_id);
+        if (!esAmbientePrestable(amb)) return false;
+        return !idsEnCarrito.has(b.id);
+      })
       .sort((a, b) =>
         (a.etiqueta_interna || '').localeCompare(b.etiqueta_interna || '', undefined, {
           numeric: true,
         })
       );
-  }, [bloqueSeleccionadoId, bloques, bienes, carritoBienes]);
+  }, [bloqueSeleccionadoId, bloques, bienes, ambientes, carritoBienes]);
 
-  // Manejo de Carrito con Bloqueo Estricto de Duplicados (Actualización Funcional)
+  // Manejo de Carrito con Bloqueo Estricto de Duplicados y Validación de Stock AIP
   const agregarAlCarrito = (bien: Bien) => {
+    // 1. Validar que el equipo pertenezca al stock AIP
+    const amb = ambientes.find((a) => a.id === bien.ambiente_id);
+    if (!esAmbientePrestable(amb)) {
+      setMensajeRapido({
+        tipo: 'error',
+        texto: `El equipo ${bien.etiqueta_interna || bien.codigo_patrimonial} se encuentra distribuido en ${
+          amb?.nombre || 'otro ambiente'
+        } (fuera del AIP). Registre primero su retorno en Distribución.`,
+      });
+      return;
+    }
+
+    // 2. Validar estado operativo
     if (bien.estado_operativo !== 'OPERATIVO') {
       setMensajeRapido({
         tipo: 'error',
@@ -226,6 +251,7 @@ export const PrestamosModule: React.FC = () => {
       return;
     }
 
+    // 3. Prevenir duplicados con actualización funcional
     let yaEstaba = false;
     setCarritoBienes((prev) => {
       if (prev.some((b) => b.id === bien.id)) {
@@ -248,8 +274,8 @@ export const PrestamosModule: React.FC = () => {
     }
   };
 
-  // Agregar lote de equipos sin duplicar
-  const agregarVariosAlCarrito = (nuevos: Bien[], origenNombre?: string) => {
+  // Agregar lote de equipos sin duplicar y validando stock AIP
+  const agregarVariosAlCarrito = (nuevos: Bien[], origenNombre?: string, avisoAdicional?: string) => {
     let cantidadAgregados = 0;
     let duplicados = 0;
 
@@ -259,6 +285,9 @@ export const PrestamosModule: React.FC = () => {
 
       for (const bien of nuevos) {
         if (bien.estado_operativo !== 'OPERATIVO') continue;
+        const amb = ambientes.find((a) => a.id === bien.ambiente_id);
+        if (!esAmbientePrestable(amb)) continue;
+
         if (idsActuales.has(bien.id)) {
           duplicados++;
           continue;
@@ -278,12 +307,17 @@ export const PrestamosModule: React.FC = () => {
         tipo: 'ok',
         texto: `¡Se agregaron ${cantidadAgregados} equipo(s)${
           origenNombre ? ` (${origenNombre})` : ''
-        }!${detalleDuplicados}`,
+        }!${detalleDuplicados}${avisoAdicional || ''}`,
       });
     } else if (duplicados > 0) {
       setMensajeRapido({
         tipo: 'error',
-        texto: `Los equipos seleccionados ya se encontraban agregados en el préstamo.`,
+        texto: `Los equipos seleccionados ya se encontraban agregados en el préstamo.${avisoAdicional || ''}`,
+      });
+    } else if (avisoAdicional) {
+      setMensajeRapido({
+        tipo: 'error',
+        texto: avisoAdicional.trim(),
       });
     }
   };
@@ -332,25 +366,31 @@ export const PrestamosModule: React.FC = () => {
     setCantidadDeseada(1);
   };
 
-  // Modalidad 4: Carga por bloque masivo (todos o parcial)
+  // Modalidad 4: Carga por bloque masivo (todos o parcial, omitiendo equipos fuera de AIP)
   const handleCargarBloque = () => {
     if (!bloqueSeleccionadoId) return;
     const bloque = bloques.find((b) => b.id === bloqueSeleccionadoId);
     if (!bloque) return;
 
+    const todosDelBloque = bienes.filter((b) => bloque.bienes_ids.includes(b.id));
+    const fueraAIP = todosDelBloque.filter((b) => {
+      const amb = ambientes.find((a) => a.id === b.ambiente_id);
+      return !esAmbientePrestable(amb);
+    });
+
     if (equiposDisponiblesEnBloque.length === 0) {
-      const todosDelBloque = bienes.filter((b) => bloque.bienes_ids.includes(b.id));
       const enMantenimiento = todosDelBloque.filter((b) => b.estado_operativo !== 'OPERATIVO').length;
       const yaEnCarrito = todosDelBloque.filter((b) => carritoBienes.some((c) => c.id === b.id)).length;
 
-      let causa = '';
-      if (yaEnCarrito > 0) causa = `${yaEnCarrito} equipo(s) ya están en la lista`;
-      if (enMantenimiento > 0) causa += `${causa ? ', ' : ''}${enMantenimiento} en soporte/mantenimiento`;
+      const causas: string[] = [];
+      if (fueraAIP.length > 0) causas.push(`${fueraAIP.length} distribuido(s) fuera del AIP`);
+      if (yaEnCarrito > 0) causas.push(`${yaEnCarrito} ya en lista`);
+      if (enMantenimiento > 0) causas.push(`${enMantenimiento} en soporte/mantenimiento`);
 
       setMensajeRapido({
         tipo: 'error',
         texto: `No hay equipos disponibles en el bloque "${bloque.nombre}"${
-          causa ? ` (${causa})` : ''
+          causas.length > 0 ? ` (${causas.join(', ')})` : ''
         }.`,
       });
       return;
@@ -363,7 +403,15 @@ export const PrestamosModule: React.FC = () => {
         : Math.min(Math.max(1, bloqueCantidadParcial), maxDisp);
 
     const seleccionados = equiposDisponiblesEnBloque.slice(0, cantidadFinal);
-    agregarVariosAlCarrito(seleccionados, `Bloque ${bloque.nombre}`);
+
+    let avisoAdicional = '';
+    if (fueraAIP.length > 0) {
+      avisoAdicional = ` (Se omitieron ${fueraAIP.length} equipo(s) distribuidos fuera del AIP: ${fueraAIP
+        .map((f) => f.etiqueta_interna)
+        .join(', ')})`;
+    }
+
+    agregarVariosAlCarrito(seleccionados, `Bloque ${bloque.nombre}`, avisoAdicional);
     setBloqueSeleccionadoId('');
     setBloqueCantidadParcial(1);
   };
@@ -1159,8 +1207,8 @@ export const PrestamosModule: React.FC = () => {
                           }}
                           className="text-[11px] px-2 py-1.5 bg-white border border-slate-300 rounded-lg text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                         >
-                          <option value="TODOS">Todos los Ambientes</option>
-                          {ambientes.map((amb) => (
+                          <option value="TODOS">Todos los AIP</option>
+                          {ambientesAIP.map((amb) => (
                             <option key={amb.id} value={amb.id}>
                               {amb.nombre}
                             </option>
@@ -1489,6 +1537,7 @@ export const PrestamosModule: React.FC = () => {
           areas={areas}
           bloques={bloques}
           bienes={bienes}
+          ambientes={ambientes}
           onRecargar={cargarDatos}
           esAdmin={esAdmin}
         />
@@ -1499,6 +1548,7 @@ export const PrestamosModule: React.FC = () => {
         isOpen={modalScannerOpen}
         onClose={() => setModalScannerOpen(false)}
         bienesDisponibles={bienes}
+        ambientes={ambientes}
         onEquipoDetectado={(bien) => {
           agregarAlCarrito(bien);
         }}

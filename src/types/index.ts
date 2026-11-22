@@ -42,6 +42,15 @@ export interface Ambiente {
   encargado: string;
   descripcion: string;
   activo: boolean;
+  permite_prestamo?: boolean;
+}
+
+export function esAmbientePrestable(ambiente?: Ambiente | null): boolean {
+  if (!ambiente) return false;
+  if (typeof ambiente.permite_prestamo === 'boolean') {
+    return ambiente.permite_prestamo;
+  }
+  return /aip/i.test(ambiente.nombre || '');
 }
 
 export interface CategoriaEquipo {

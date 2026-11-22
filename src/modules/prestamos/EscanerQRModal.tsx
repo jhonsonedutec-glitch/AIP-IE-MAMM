@@ -9,12 +9,13 @@ import {
   Upload,
   Video,
 } from 'lucide-react';
-import { Bien } from '@/types';
+import { Bien, Ambiente, esAmbientePrestable } from '@/types';
 
 interface EscanerQRModalProps {
   isOpen: boolean;
   onClose: () => void;
   bienesDisponibles: Bien[];
+  ambientes?: Ambiente[];
   onEquipoDetectado: (bien: Bien) => void;
 }
 
@@ -22,6 +23,7 @@ export const EscanerQRModal: React.FC<EscanerQRModalProps> = ({
   isOpen,
   onClose,
   bienesDisponibles,
+  ambientes,
   onEquipoDetectado,
 }) => {
   const containerId = 'html5qr-code-reader-modal';
@@ -339,6 +341,17 @@ export const EscanerQRModal: React.FC<EscanerQRModalProps> = ({
     if (bienEncontrado.estado_operativo !== 'OPERATIVO') {
       setErrorMsg(
         `El equipo ${bienEncontrado.etiqueta_interna} NO está disponible. Estado actual: ${bienEncontrado.estado_operativo}`
+      );
+      setSuccessMsg(null);
+      return;
+    }
+
+    const amb = ambientes?.find((a) => a.id === bienEncontrado.ambiente_id);
+    if (ambientes && !esAmbientePrestable(amb)) {
+      setErrorMsg(
+        `El equipo ${bienEncontrado.etiqueta_interna} se encuentra distribuido en ${
+          amb?.nombre || 'otro ambiente'
+        } (fuera del AIP). Registre primero su retorno en Distribución.`
       );
       setSuccessMsg(null);
       return;

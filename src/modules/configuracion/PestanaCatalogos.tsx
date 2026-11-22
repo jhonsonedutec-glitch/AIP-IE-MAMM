@@ -10,7 +10,7 @@ import {
   Power,
 } from 'lucide-react';
 import { ambienteRepository, categoriaRepository } from '@/repositories';
-import { Ambiente, CategoriaEquipo } from '@/types';
+import { Ambiente, CategoriaEquipo, esAmbientePrestable } from '@/types';
 
 export const PestanaCatalogos: React.FC = () => {
   const [ambientes, setAmbientes] = useState<Ambiente[]>([]);
@@ -25,6 +25,7 @@ export const PestanaCatalogos: React.FC = () => {
   const [ambNombre, setAmbNombre] = useState('');
   const [ambEncargado, setAmbEncargado] = useState('');
   const [ambDescripcion, setAmbDescripcion] = useState('');
+  const [ambPermitePrestamo, setAmbPermitePrestamo] = useState(false);
 
   // Estados para modal de Categoría
   const [showCatModal, setShowCatModal] = useState(false);
@@ -121,6 +122,7 @@ export const PestanaCatalogos: React.FC = () => {
           nombre: ambNombre.trim(),
           encargado: ambEncargado.trim(),
           descripcion: ambDescripcion.trim(),
+          permite_prestamo: ambPermitePrestamo,
         });
         setFeedback({ tipo: 'ok', msg: 'Ambiente actualizado correctamente.' });
       } else {
@@ -129,6 +131,7 @@ export const PestanaCatalogos: React.FC = () => {
           encargado: ambEncargado.trim(),
           descripcion: ambDescripcion.trim(),
           activo: true,
+          permite_prestamo: ambPermitePrestamo,
         });
         setFeedback({ tipo: 'ok', msg: 'Nuevo ambiente creado con éxito.' });
       }
@@ -136,6 +139,7 @@ export const PestanaCatalogos: React.FC = () => {
       setAmbNombre('');
       setAmbEncargado('');
       setAmbDescripcion('');
+      setAmbPermitePrestamo(false);
       setEditAmbienteId(null);
       await cargarDatos();
     } catch (err: any) {
@@ -234,6 +238,7 @@ export const PestanaCatalogos: React.FC = () => {
                 setAmbNombre('');
                 setAmbEncargado('');
                 setAmbDescripcion('');
+                setAmbPermitePrestamo(false);
                 setShowAmbienteModal(true);
               }}
               className="inline-flex items-center space-x-1 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg shadow-xs transition-colors"
@@ -258,7 +263,16 @@ export const PestanaCatalogos: React.FC = () => {
             <tbody className="divide-y divide-slate-100">
               {ambientes.map((amb) => (
                 <tr key={amb.id} className="hover:bg-slate-50/60 transition-colors">
-                  <td className="py-2.5 px-3 font-semibold text-slate-800">{amb.nombre}</td>
+                  <td className="py-2.5 px-3 font-semibold text-slate-800">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span>{amb.nombre}</span>
+                      {esAmbientePrestable(amb) && (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                          Stock AIP
+                        </span>
+                      )}
+                    </div>
+                  </td>
                   <td className="py-2.5 px-3 text-slate-600">{amb.encargado || '—'}</td>
                   <td className="py-2.5 px-3 text-slate-500">{amb.descripcion || '—'}</td>
                   <td className="py-2.5 px-3">
@@ -280,6 +294,7 @@ export const PestanaCatalogos: React.FC = () => {
                         setAmbNombre(amb.nombre);
                         setAmbEncargado(amb.encargado);
                         setAmbDescripcion(amb.descripcion);
+                        setAmbPermitePrestamo(esAmbientePrestable(amb));
                         setShowAmbienteModal(true);
                       }}
                       className="p-1 text-slate-500 hover:text-emerald-700 transition-colors"
@@ -443,6 +458,23 @@ export const PestanaCatalogos: React.FC = () => {
                   placeholder="Ej. Pabellón B - Segundo Piso"
                   className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 />
+              </div>
+
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg">
+                <label className="flex items-start space-x-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={ambPermitePrestamo}
+                    onChange={(e) => setAmbPermitePrestamo(e.target.checked)}
+                    className="mt-0.5 rounded text-emerald-600 focus:ring-emerald-500 h-4 w-4"
+                  />
+                  <div>
+                    <span className="block font-semibold text-slate-800">Habilitado para Préstamos QR (Stock AIP)</span>
+                    <span className="block text-[11px] text-slate-500 mt-0.5 leading-tight">
+                      Permite que los equipos ubicados en este ambiente estén disponibles para préstamos pedagógicos y asignación a bloques.
+                    </span>
+                  </div>
+                </label>
               </div>
               <div className="flex items-center justify-end space-x-2 pt-3 border-t border-slate-100">
                 <button

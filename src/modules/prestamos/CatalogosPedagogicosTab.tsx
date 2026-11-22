@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Users,
   BookOpen,
@@ -12,7 +12,14 @@ import {
   Search,
   X,
 } from 'lucide-react';
-import { Docente, AreaCurricular, BloqueEquipos, BienPatrimonial } from '@/types';
+import {
+  Docente,
+  AreaCurricular,
+  BloqueEquipos,
+  BienPatrimonial,
+  Ambiente,
+  esAmbientePrestable,
+} from '@/types';
 import {
   docenteRepository,
   areaCurricularRepository,
@@ -25,6 +32,7 @@ interface CatalogosPedagogicosTabProps {
   areas: AreaCurricular[];
   bloques: BloqueEquipos[];
   bienes: BienPatrimonial[];
+  ambientes: Ambiente[];
   onRecargar: () => Promise<void>;
   esAdmin: boolean;
 }
@@ -34,6 +42,7 @@ export const CatalogosPedagogicosTab: React.FC<CatalogosPedagogicosTabProps> = (
   areas,
   bloques,
   bienes,
+  ambientes,
   onRecargar,
   esAdmin,
 }) => {
@@ -71,6 +80,7 @@ export const CatalogosPedagogicosTab: React.FC<CatalogosPedagogicosTabProps> = (
   const [guardando, setGuardando] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [busquedaBienBloque, setBusquedaBienBloque] = useState('');
+  const [filtroAmbienteBloque, setFiltroAmbienteBloque] = useState<string>('TODOS');
 
   const operadorInfo = perfil
     ? { uid: perfil.uid, email: perfil.email, rol: perfil.rol, nombre: perfil.nombres }
@@ -266,6 +276,7 @@ export const CatalogosPedagogicosTab: React.FC<CatalogosPedagogicosTabProps> = (
       });
     }
     setBusquedaBienBloque('');
+    setFiltroAmbienteBloque('TODOS');
     setErrorMsg(null);
     setModalBloqueOpen(true);
   };
@@ -334,18 +345,55 @@ export const CatalogosPedagogicosTab: React.FC<CatalogosPedagogicosTabProps> = (
     }
   };
 
-  // Bienes filtrados para modal de bloques
-  const bienesParaBloqueFiltrados = bienes.filter((bien) => {
-    if (bien.activo === false || bien.estado_operativo === 'DE_BAJA') return false;
-    if (!busquedaBienBloque.trim()) return true;
-    const q = busquedaBienBloque.toLowerCase();
-    return (
-      (bien.etiqueta_interna && bien.etiqueta_interna.toLowerCase().includes(q)) ||
-      bien.denominacion.toLowerCase().includes(q) ||
-      bien.marca.toLowerCase().includes(q) ||
-      (bien.codigo_patrimonial && bien.codigo_patrimonial.toLowerCase().includes(q))
-    );
-  });
+  // Ambientes AIP habilitados para filtro
+  const ambientesAIP = useMemo(() => {
+    return ambientes.filter((a) => esAmbientePrestable(a) && a.activo !== false);
+  }, [ambientes]);
+
+  // Bienes en el bloque actual que salieron del AIP por traslados
+  const bienesEnBloqueFueraAIP = useMemo(() => {
+    return formBloque.bienes_ids
+      .map((id) => bienes.find((b) => b.id === id))
+      .filter((bien): bien is BienPatrimonial => {
+        if (!bien) return false;
+        const amb = ambientes.find((a) => a.id === bien.ambiente_id);
+        return !esAmbientePrestable(amb);
+      });
+  }, [formBloque.bienes_ids, bienes, ambientes]);
+
+  // Bienes filtrados para selector del modal de bloques
+  const bienesParaBloqueFiltrados = useMemo(() => {
+    return bienes.filter((bien) => {
+      // Solo bienes activos y no dados de baja
+      if (bien.activo === false || bien.estado_operativo === 'DE_BAJA') return false;
+
+      // El ambiente actual DEBE ser prestable (AIP)
+      const amb = ambientes.find((a) => a.id === bien.ambiente_id);
+      if (!esAmbientePrestable(amb)) return false;
+
+      // Excluir equipos ya asignados a otro bloque activo diferente al que se edita
+      const asignadoAOtroBloque = bloques.some((b) => {
+        if (b.activo === false) return false;
+        if (bloqueEditando && b.id === bloqueEditando.id) return false;
+        return b.bienes_ids?.includes(bien.id);
+      });
+      if (asignadoAOtroBloque) return false;
+
+      // Filtro por ambiente AIP específico si no es 'TODOS'
+      if (filtroAmbienteBloque !== 'TODOS' && bien.ambiente_id !== filtroAmbienteBloque) {
+        return false;
+      }
+
+      if (!busquedaBienBloque.trim()) return true;
+      const q = busquedaBienBloque.toLowerCase();
+      return (
+        (bien.etiqueta_interna && bien.etiqueta_interna.toLowerCase().includes(q)) ||
+        bien.denominacion.toLowerCase().includes(q) ||
+        bien.marca.toLowerCase().includes(q) ||
+        (bien.codigo_patrimonial && bien.codigo_patrimonial.toLowerCase().includes(q))
+      );
+    });
+  }, [bienes, ambientes, bloques, bloqueEditando, filtroAmbienteBloque, busquedaBienBloque]);
 
   return (
     <div className="space-y-6">
@@ -666,6 +714,38 @@ export const CatalogosPedagogicosTab: React.FC<CatalogosPedagogicosTabProps> = (
                         </p>
                       )}
                     </div>
+
+                    {/* Alerta de equipos del bloque trasladados fuera del AIP */}
+                    {(() => {
+                      const fueraAIP = b.bienes_ids
+                        .map((bid) => bienes.find((x) => x.id === bid))
+                        .filter((bien): bien is BienPatrimonial => {
+                          if (!bien) return false;
+                          const amb = ambientes.find((a) => a.id === bien.ambiente_id);
+                          return !esAmbientePrestable(amb);
+                        });
+
+                      if (fueraAIP.length === 0) return null;
+
+                      return (
+                        <div className="mt-2.5 space-y-1">
+                          {fueraAIP.map((bf) => {
+                            const ambNombre = ambientes.find((a) => a.id === bf.ambiente_id)?.nombre || 'Ambiente Externo';
+                            return (
+                              <div
+                                key={bf.id}
+                                className="px-2 py-1 bg-amber-50 border border-amber-200 rounded-lg text-[10px] text-amber-800 font-medium flex items-center justify-between"
+                              >
+                                <span className="font-mono font-bold">{bf.etiqueta_interna}</span>
+                                <span className="truncate max-w-[180px] text-amber-700">
+                                  Distribuido en {ambNombre} — Excluido de préstamos
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   {esAdmin && (
@@ -908,6 +988,41 @@ export const CatalogosPedagogicosTab: React.FC<CatalogosPedagogicosTabProps> = (
                 </div>
               )}
 
+              {/* Alerta si el bloque contiene equipos que salieron del AIP */}
+              {bienesEnBloqueFueraAIP.length > 0 && (
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 flex items-start justify-between gap-2">
+                  <div className="flex items-start space-x-2">
+                    <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-semibold">
+                        {bienesEnBloqueFueraAIP.length} equipo(s) en este bloque fueron trasladados fuera del AIP:
+                      </p>
+                      <p className="text-[11px] text-amber-700 mt-0.5">
+                        {bienesEnBloqueFueraAIP
+                          .map((b) => {
+                            const amb = ambientes.find((a) => a.id === b.ambiente_id);
+                            return `${b.etiqueta_interna} (${amb?.nombre || 'Fuera de AIP'})`;
+                          })
+                          .join(', ')}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const idsFuera = new Set(bienesEnBloqueFueraAIP.map((b) => b.id));
+                      setFormBloque((prev) => ({
+                        ...prev,
+                        bienes_ids: prev.bienes_ids.filter((id) => !idsFuera.has(id)),
+                      }));
+                    }}
+                    className="px-2.5 py-1 bg-amber-200 hover:bg-amber-300 text-amber-950 font-semibold rounded-lg text-[11px] transition-colors whitespace-nowrap"
+                  >
+                    Quitar del Bloque
+                  </button>
+                </div>
+              )}
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-semibold text-slate-700 block mb-1">
@@ -938,30 +1053,45 @@ export const CatalogosPedagogicosTab: React.FC<CatalogosPedagogicosTabProps> = (
               </div>
 
               <div>
-                <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
                   <label className="text-xs font-semibold text-slate-700">
                     Seleccionar Equipos del Bloque ({formBloque.bienes_ids.length} seleccionados)
                   </label>
-                  <div className="relative w-48">
-                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2" />
-                    <input
-                      type="text"
-                      value={busquedaBienBloque}
-                      onChange={(e) => setBusquedaBienBloque(e.target.value)}
-                      placeholder="Filtrar equipos..."
-                      className="w-full text-[11px] pl-7 pr-2 py-1 bg-slate-50 border border-slate-200 rounded-lg focus:bg-white focus:outline-none"
-                    />
+                  <div className="flex items-center gap-1.5">
+                    <select
+                      value={filtroAmbienteBloque}
+                      onChange={(e) => setFiltroAmbienteBloque(e.target.value)}
+                      className="text-[11px] px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg focus:bg-white focus:outline-none"
+                    >
+                      <option value="TODOS">Todos los AIP</option>
+                      {ambientesAIP.map((amb) => (
+                        <option key={amb.id} value={amb.id}>
+                          {amb.nombre}
+                        </option>
+                      ))}
+                    </select>
+                    <div className="relative w-40">
+                      <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2 top-2" />
+                      <input
+                        type="text"
+                        value={busquedaBienBloque}
+                        onChange={(e) => setBusquedaBienBloque(e.target.value)}
+                        placeholder="Filtrar equipos..."
+                        className="w-full text-[11px] pl-6 pr-2 py-1 bg-slate-50 border border-slate-200 rounded-lg focus:bg-white focus:outline-none"
+                      />
+                    </div>
                   </div>
                 </div>
 
                 <div className="border border-slate-200 rounded-xl p-2 max-h-56 overflow-y-auto space-y-1.5 bg-slate-50">
                   {bienesParaBloqueFiltrados.length === 0 ? (
                     <p className="text-xs text-slate-400 text-center py-4">
-                      No se encontraron equipos disponibles.
+                      No se encontraron equipos disponibles en AIP.
                     </p>
                   ) : (
                     bienesParaBloqueFiltrados.map((bien) => {
                       const incluido = formBloque.bienes_ids.includes(bien.id);
+                      const ambEquipo = ambientes.find((a) => a.id === bien.ambiente_id);
                       return (
                         <div
                           key={bien.id}
@@ -980,8 +1110,11 @@ export const CatalogosPedagogicosTab: React.FC<CatalogosPedagogicosTabProps> = (
                               className="w-3.5 h-3.5 text-indigo-600 rounded cursor-pointer"
                             />
                             <span className="font-mono font-bold">{bien.etiqueta_interna}</span>
-                            <span className="truncate max-w-[200px] text-slate-500">
+                            <span className="truncate max-w-[160px] text-slate-500">
                               &bull; {bien.denominacion} ({bien.marca})
+                            </span>
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-medium border border-slate-200">
+                              {ambEquipo?.nombre || 'AIP'}
                             </span>
                           </div>
                           <span
