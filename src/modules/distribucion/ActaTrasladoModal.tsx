@@ -1,6 +1,6 @@
 import React, { useRef } from 'react';
 import { X, Printer, ShieldCheck } from 'lucide-react';
-import { MovimientoBien, Ambiente } from '@/types';
+import { MovimientoBien, Ambiente, formatearNombreIE } from '@/types';
 
 interface ActaTrasladoModalProps {
   movimientos: MovimientoBien[];
@@ -36,6 +36,7 @@ export const ActaTrasladoModal: React.FC<ActaTrasladoModalProps> = ({
       : ambienteDestinoBase;
 
   const codigoActa = primerMov.lote_id || `ACTA-IND-${primerMov.id.slice(0, 8).toUpperCase()}`;
+  const nombreIELimpio = formatearNombreIE(institucionNombre);
 
   const dreTexto = (dre || '').trim().toUpperCase().startsWith('DRE')
     ? dre
@@ -133,7 +134,7 @@ export const ActaTrasladoModal: React.FC<ActaTrasladoModalProps> = ({
                   </h4>
                   <h3 className="text-xs font-bold text-slate-700 uppercase">{ugelTexto}</h3>
                   <h2 className="text-sm sm:text-base font-extrabold text-slate-900 uppercase tracking-tight mt-0.5">
-                    {institucionNombre}
+                    I.E. &quot;{nombreIELimpio}&quot;
                   </h2>
                   <p className="text-[11px] text-emerald-800 font-semibold mt-0.5">
                     Aula de Innovación Pedagógica (AIP) – Gestión de Recursos Tecnológicos

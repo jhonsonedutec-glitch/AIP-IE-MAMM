@@ -1,5 +1,4 @@
 import React, { useState, useMemo } from 'react';
-import * as XLSX from 'xlsx';
 import {
   Search,
   RotateCcw,
@@ -8,12 +7,14 @@ import {
   ChevronRight,
   Lock,
 } from 'lucide-react';
-import { AuditoriaLog } from '@/types';
+import { AuditoriaLog, InstitucionConfig } from '@/types';
+import { generarExcelProfesional, ColumnaReporteExcel } from '@/utils/excelProfesional';
 
 interface AuditoriaLogsTabProps {
   logs: AuditoriaLog[];
   loading: boolean;
   onRefresh: () => Promise<void>;
+  config?: InstitucionConfig | null;
 }
 
 const ITEMS_POR_PAGINA = 20;
@@ -34,12 +35,14 @@ export const AuditoriaLogsTab: React.FC<AuditoriaLogsTabProps> = ({
   logs,
   loading,
   onRefresh,
+  config,
 }) => {
   const [busqueda, setBusqueda] = useState('');
   const [filtroColeccion, setFiltroColeccion] = useState('');
   const [filtroAccion, setFiltroAccion] = useState('');
   const [filtroUsuario, setFiltroUsuario] = useState('');
   const [paginaActual, setPaginaActual] = useState(1);
+  const [exportando, setExportando] = useState(false);
 
   // Extraer opciones únicas para filtros
   const coleccionesDisponibles = useMemo(() => {
@@ -100,40 +103,51 @@ export const AuditoriaLogsTab: React.FC<AuditoriaLogsTabProps> = ({
     setPaginaActual(1);
   };
 
-  // Exportar logs filtrados a Excel
-  const handleExportarExcel = () => {
-    const data = logsFiltrados.map((l, idx) => {
-      const fechaStr = l.fecha ? new Date(l.fecha).toLocaleString('es-PE') : '—';
-      return {
-        'N°': idx + 1,
-        'ID Evento': l.id,
-        'Fecha y Hora': fechaStr,
-        Acción: l.accion,
-        Colección: l.coleccion,
-        'ID Documento': l.documento_id || '—',
-        'Operador (Email)': l.usuario_email,
-        'ID Usuario': l.usuario_id,
-        'Detalle de la Operación': l.detalle,
-      };
-    });
+  // Exportar logs filtrados a Excel Profesional con ExcelJS
+  const handleExportarExcel = async () => {
+    try {
+      setExportando(true);
+      const columnas: ColumnaReporteExcel[] = [
+        { header: 'N°', key: 'index', width: 6, align: 'center' },
+        { header: 'ID Evento', key: 'id', width: 22, isTextFormat: true },
+        { header: 'Fecha y Hora', key: 'fecha', width: 22 },
+        { header: 'Acción', key: 'accion', width: 16, align: 'center', isEstado: true },
+        { header: 'Colección / Módulo', key: 'coleccion', width: 20 },
+        { header: 'ID Documento', key: 'documento_id', width: 22, isTextFormat: true },
+        { header: 'Operador (Email)', key: 'usuario_email', width: 28 },
+        { header: 'ID Usuario', key: 'usuario_id', width: 24, isTextFormat: true },
+        { header: 'Detalle de la Operación', key: 'detalle', width: 45 },
+      ];
 
-    const ws = XLSX.utils.json_to_sheet(data);
-    ws['!cols'] = [
-      { wch: 6 },
-      { wch: 22 },
-      { wch: 22 },
-      { wch: 16 },
-      { wch: 20 },
-      { wch: 22 },
-      { wch: 28 },
-      { wch: 24 },
-      { wch: 45 },
-    ];
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Auditoría');
+      const datos = logsFiltrados.map((l, idx) => ({
+        index: idx + 1,
+        id: l.id,
+        fecha: l.fecha ? new Date(l.fecha).toLocaleString('es-PE') : '—',
+        accion: l.accion,
+        coleccion: l.coleccion,
+        documento_id: l.documento_id || '—',
+        usuario_email: l.usuario_email || '—',
+        usuario_id: l.usuario_id || '—',
+        detalle: l.detalle || '—',
+      }));
 
-    const fechaArchivo = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-    XLSX.writeFile(wb, `Auditoria_Logs_MAMM_${fechaArchivo}.xlsx`);
+      const fechaArchivo = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+      await generarExcelProfesional({
+        tituloReporte: 'REGISTRO DE AUDITORÍA INMUTABLE Y TRAZABILIDAD INSTITUCIONAL',
+        subtitulo: `Total de eventos exportados: ${datos.length} registros`,
+        nombreHoja: 'Auditoría',
+        nombreArchivo: `Auditoria_Logs_MAMM_${fechaArchivo}.xlsx`,
+        config,
+        columnas,
+        datos,
+        incluirFirmas: false,
+        orientacion: 'landscape',
+      });
+    } catch (err) {
+      console.error('Error al exportar auditoría a Excel:', err);
+    } finally {
+      setExportando(false);
+    }
   };
 
   return (
@@ -257,10 +271,11 @@ export const AuditoriaLogsTab: React.FC<AuditoriaLogsTabProps> = ({
           <button
             type="button"
             onClick={handleExportarExcel}
-            className="inline-flex items-center space-x-1.5 px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
+            disabled={exportando || logsFiltrados.length === 0}
+            className="inline-flex items-center space-x-1.5 px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
-            <span>Exportar Auditoría a Excel (.xlsx)</span>
+            <span>{exportando ? 'Generando Excel...' : 'Exportar Auditoría a Excel (.xlsx)'}</span>
           </button>
         </div>
       </div>

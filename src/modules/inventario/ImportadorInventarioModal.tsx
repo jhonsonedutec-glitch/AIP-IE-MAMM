@@ -38,6 +38,7 @@ interface FilaPrevia {
   modelo: string;
   serie: string;
   codigo_patrimonial: string;
+  tipo_codigo?: 'S/C' | 'CIC';
   color: string;
   estado_conservacion: EstadoConservacion;
   ambiente_id: string;
@@ -195,6 +196,18 @@ export const ImportadorInventarioModal: React.FC<ImportadorInventarioModalProps>
       const serie = getVal(['serie', 'nro serie', 'numero de serie', 'sn']) || 'S/N';
       const codigo_patrimonial =
         getVal(['codigo patrimonial', 'cod patrimonial', 'patrimonio', 'codigo']) || 'S/C';
+
+      // Tipo de código (CIC o S/C)
+      const tipoRaw = getVal(['tipo de codigo', 'tipo codigo', 'tipocodigo', 'tipo_codigo']).toUpperCase();
+      let tipo_codigo: 'S/C' | 'CIC' = 'CIC';
+      if (tipoRaw.includes('CIC')) {
+        tipo_codigo = 'CIC';
+      } else if (tipoRaw.includes('S/C') || tipoRaw.includes('SC') || !codigo_patrimonial || codigo_patrimonial === 'S/C') {
+        tipo_codigo = 'S/C';
+      } else {
+        tipo_codigo = 'CIC';
+      }
+
       const color = getVal(['color']) || '';
       const estRaw = getVal(['estado conservacion', 'conservacion', 'estado', 'condicion']).toUpperCase();
       const estado_conservacion: EstadoConservacion = ['N', 'B', 'R', 'M'].includes(estRaw)
@@ -276,6 +289,7 @@ export const ImportadorInventarioModal: React.FC<ImportadorInventarioModalProps>
         modelo: modelo.toUpperCase(),
         serie: serie.toUpperCase(),
         codigo_patrimonial: codigo_patrimonial.toUpperCase(),
+        tipo_codigo,
         color: color.toUpperCase(),
         estado_conservacion,
         ambiente_id,
@@ -317,7 +331,7 @@ export const ImportadorInventarioModal: React.FC<ImportadorInventarioModalProps>
       modelo: f.modelo,
       serie: f.serie,
       codigo_patrimonial: f.codigo_patrimonial,
-      tipo_codigo: (f.codigo_patrimonial === 'S/C' ? 'S/C' : 'CIC') as 'S/C' | 'CIC',
+      tipo_codigo: f.tipo_codigo || ((f.codigo_patrimonial === 'S/C' ? 'S/C' : 'CIC') as 'S/C' | 'CIC'),
       color: f.color,
       estado_conservacion: f.estado_conservacion,
       estado_operativo: 'OPERATIVO' as const,

@@ -266,6 +266,7 @@ export const ReportesModule: React.FC = () => {
               logs={auditoriaLogs}
               loading={loadingLogs}
               onRefresh={recargarAuditoria}
+              config={config}
             />
           )}
         </div>

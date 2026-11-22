@@ -28,6 +28,7 @@ import {
   GrupoDuplicado,
   normalizarCodigoPatrimonial,
   normalizarSerie,
+  compararBienesDeterminista,
 } from '@/types';
 import { bienRepository, ambienteRepository, categoriaRepository } from '@/repositories';
 import { useAuth } from '@/hooks';
@@ -164,12 +165,8 @@ export const InventarioModule: React.FC = () => {
       return true;
     });
 
-    // Orden natural por defecto: LAP-001, LAP-002, ..., LAP-080
-    return filtrados.sort((a, b) => {
-      const etqA = a.etiqueta_interna || a.codigo_patrimonial || '';
-      const etqB = b.etiqueta_interna || b.codigo_patrimonial || '';
-      return etqA.localeCompare(etqB, undefined, { numeric: true, sensitivity: 'base' });
-    });
+    // Orden determinista: etiquetas reales naturales primero (LAP-001..LAP-080), desempate numérico por código patrimonial
+    return filtrados.sort(compararBienesDeterminista);
   }, [bienes, busqueda, filtroAmbiente, filtroCategoria, filtroConservacion, filtroOperativo, filtroLote]);
 
   // Detección de equipos con observación "VERDE" o "YERDE" sin lote asignado para regularización

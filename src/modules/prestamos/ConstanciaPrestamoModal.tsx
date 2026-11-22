@@ -1,6 +1,6 @@
 import React from 'react';
 import { X, Printer, CheckCircle2, AlertTriangle, Clock } from 'lucide-react';
-import { Prestamo, Bien, ConfiguracionSistema } from '@/types';
+import { Prestamo, Bien, ConfiguracionSistema, formatearNombreIE } from '@/types';
 
 interface ConstanciaPrestamoModalProps {
   isOpen: boolean;
@@ -21,7 +21,7 @@ export const ConstanciaPrestamoModal: React.FC<ConstanciaPrestamoModalProps> = (
 
   const dre = configuracion?.dre || 'AMAZONAS';
   const ugel = configuracion?.ugel || 'BAGUA';
-  const institucion = configuracion?.nombre_ie || 'I.E. EMBLEMÁTICA MANUEL ANTONIO MESONES MURO';
+  const institucion = `I.E. "${formatearNombreIE(configuracion?.nombre_ie)}"`;
 
   const dreTexto = dre.toUpperCase().startsWith('DRE') ? dre.toUpperCase() : `DRE ${dre.toUpperCase()}`;
   const ugelTexto = ugel.toUpperCase().startsWith('UGEL') ? ugel.toUpperCase() : `UGEL ${ugel.toUpperCase()}`;

@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import * as XLSX from 'xlsx';
 import {
   FileSpreadsheet,
   Download,
@@ -24,6 +23,7 @@ import {
   auditoriaRepository,
 } from '@/repositories';
 import { useAuth } from '@/hooks';
+import { generarBackupConsolidadoExcel } from '@/utils/excelProfesional';
 
 interface RespaldosTabProps {
   config: InstitucionConfig | null;
@@ -192,165 +192,187 @@ export const RespaldosTab: React.FC<RespaldosTabProps> = ({ config }) => {
         prestamoRepository.listar(),
       ]);
 
-      const workbook = XLSX.utils.book_new();
-
-      // 1. Hoja Inventario
-      const wsInventario = XLSX.utils.json_to_sheet(
-        bienesData.map((b) => ({
-          ID: b.id,
-          'Código Patrimonial': b.codigo_patrimonial || 'S/C',
-          'Etiqueta QR': b.etiqueta_interna || 'S/E',
-          Denominación: b.denominacion,
-          Marca: b.marca || '—',
-          Modelo: b.modelo || '—',
-          'N° Serie': b.serie || 'S/N',
-          Color: b.color || '—',
-          Lote: b.lote_etiqueta || '—',
-          'Color Lote': b.lote_color || '—',
-          Conservación: b.estado_conservacion,
-          'Estado Operativo': b.estado_operativo,
-          'ID Ambiente': b.ambiente_id,
-          'Detalle Ubicación': b.ubicacion_detalle || '—',
-          Observaciones: b.observacion || '—',
-        }))
-      );
-      XLSX.utils.book_append_sheet(workbook, wsInventario, 'Inventario');
-
-      // 2. Hoja Traslados
-      const wsTraslados = XLSX.utils.json_to_sheet(
-        movData.map((m) => ({
-          ID: m.id,
-          'Lote Traslado': m.lote_id || '—',
-          'Fecha Movimiento': m.fecha_movimiento ? new Date(m.fecha_movimiento).toISOString() : '',
-          'ID Bien': m.bien_id,
-          'Código Patrimonial': m.codigo_patrimonial,
-          'Etiqueta QR': m.etiqueta_interna || 'S/E',
-          Denominación: m.denominacion || '',
-          'ID Ambiente Origen': m.ambiente_origen_id,
-          'ID Ambiente Destino': m.ambiente_destino_id,
-          'Detalle Destino': m.ubicacion_detalle_destino || '',
-          Motivo: m.motivo,
-          'Responsable Entrega': m.responsable_entrega || '',
-          'Responsable Recepción': m.responsable_recepcion,
-          'Operador Email': m.usuario_email || '',
-        }))
-      );
-      XLSX.utils.book_append_sheet(workbook, wsTraslados, 'Traslados');
-
-      // 3. Hoja Mantenimientos
-      const wsMantenimientos = XLSX.utils.json_to_sheet(
-        mantData.map((m) => ({
-          ID: m.id,
-          'ID Bien': m.bien_id,
-          'Código Patrimonial': m.codigo_patrimonial,
-          'Etiqueta QR': m.etiqueta_interna || 'S/E',
-          Denominación: m.denominacion || '',
-          Tipo: m.tipo,
-          'Fecha Inicio': m.fecha_inicio ? new Date(m.fecha_inicio).toISOString() : '',
-          'Fecha Fin': m.fecha_fin ? new Date(m.fecha_fin).toISOString() : '',
-          Técnico: m.tecnico,
-          Falla: m.descripcion_falla,
-          'Trabajo Realizado': m.trabajo_realizado,
-          Repuestos: m.repuestos,
-          'Conservación Resultante': m.estado_conservacion_resultante,
-          'Estado Operativo Resultante': m.estado_operativo_resultante || '',
-          Cerrado: m.cerrado ? 'SÍ' : 'NO',
-        }))
-      );
-      XLSX.utils.book_append_sheet(workbook, wsMantenimientos, 'Mantenimientos');
-
-      // 4. Hoja Préstamos
-      const wsPrestamos = XLSX.utils.json_to_sheet(
-        prestData.map((p) => ({
-          ID: p.id,
-          Tipo: p.tipo,
-          'ID Docente': p.docente_id,
-          'Docente Nombre': p.docente_nombre,
-          'ID Área': p.area_id,
-          'Área Nombre': p.area_nombre,
-          'Grado y Sección': p.grado_seccion,
-          'Ambiente de Uso': p.ambiente_uso,
-          'Cantidad Equipos': p.cantidad_equipos || p.bienes_ids?.length || 0,
-          'Equipos IDs': (p.bienes_ids || []).join(', '),
-          Accesorios: p.accesorios_entregados,
-          'Fecha Salida': p.fecha_salida ? new Date(p.fecha_salida).toISOString() : '',
-          'Fecha Devolución Estimada': p.fecha_devolucion_estimada
-            ? new Date(p.fecha_devolucion_estimada).toISOString()
-            : '',
-          'Fecha Devolución Real': p.fecha_devolucion_real
-            ? new Date(p.fecha_devolucion_real).toISOString()
-            : '',
-          Estado: p.estado,
-          'Observación Retorno': p.observacion_retorno || '',
-        }))
-      );
-      XLSX.utils.book_append_sheet(workbook, wsPrestamos, 'Prestamos');
-
-      // 5. Hoja Docentes
-      const wsDocentes = XLSX.utils.json_to_sheet(
-        docData.map((d) => ({
-          ID: d.id,
-          DNI: d.dni,
-          'Nombres y Apellidos': d.nombres_apellidos,
-          Especialidad: d.especialidad || '',
-          'ID Área Principal': d.area_principal_id || '',
-          Celular: d.celular || '',
-          Email: d.email || '',
-          Activo: d.activo ? 'SÍ' : 'NO',
-        }))
-      );
-      XLSX.utils.book_append_sheet(workbook, wsDocentes, 'Docentes');
-
-      // 6. Hoja Ambientes
-      const wsAmbientes = XLSX.utils.json_to_sheet(
-        ambData.map((a) => ({
-          ID: a.id,
-          Nombre: a.nombre,
-          Encargado: a.encargado,
-          Descripción: a.descripcion,
-          'Permite Préstamo (AIP)': a.permite_prestamo ? 'SÍ' : 'NO',
-          Activo: a.activo ? 'SÍ' : 'NO',
-        }))
-      );
-      XLSX.utils.book_append_sheet(workbook, wsAmbientes, 'Ambientes');
-
-      // 7. Hoja Categorías
-      const wsCategorias = XLSX.utils.json_to_sheet(
-        catData.map((c) => ({
-          ID: c.id,
-          Nombre: c.nombre,
-          'Prefijo Etiqueta': c.prefijo_etiqueta,
-          Activo: c.activo ? 'SÍ' : 'NO',
-        }))
-      );
-      XLSX.utils.book_append_sheet(workbook, wsCategorias, 'Categorias');
-
-      // 8. Hoja Áreas Curriculares
-      const wsAreas = XLSX.utils.json_to_sheet(
-        areasData.map((ar) => ({
-          ID: ar.id,
-          Nombre: ar.nombre,
-          Activo: ar.activo ? 'SÍ' : 'NO',
-        }))
-      );
-      XLSX.utils.book_append_sheet(workbook, wsAreas, 'Areas');
-
-      // 9. Hoja Bloques de Equipos
-      const wsBloques = XLSX.utils.json_to_sheet(
-        bloqData.map((bl) => ({
-          ID: bl.id,
-          Nombre: bl.nombre,
-          Descripción: bl.descripcion,
-          'Código QR Lote': bl.codigo_qr_lote || '',
-          'Total Bienes': (bl.bienes_ids || []).length,
-          'IDs Bienes': (bl.bienes_ids || []).join(', '),
-          Activo: bl.activo ? 'SÍ' : 'NO',
-        }))
-      );
-      XLSX.utils.book_append_sheet(workbook, wsBloques, 'Bloques');
-
       const filename = `SIGI-AIP-MAMM_Backup_Consolidado_${obtenerTimestampArchivo()}.xlsx`;
-      XLSX.writeFile(workbook, filename);
+
+      await generarBackupConsolidadoExcel({
+        nombreArchivo: filename,
+        config,
+        operadorEmail: user?.email || 'admin@aip.edu.pe',
+        hojas: [
+          {
+            nombre: 'Inventario',
+            columnas: [
+              { header: 'ID Bien', key: 'id', width: 22, isTextFormat: true },
+              { header: 'Código Patrimonial', key: 'codigo_patrimonial', width: 18, isTextFormat: true },
+              { header: 'Etiqueta QR', key: 'etiqueta_interna', width: 14, isTextFormat: true },
+              { header: 'Denominación', key: 'denominacion', width: 32 },
+              { header: 'Marca', key: 'marca', width: 16 },
+              { header: 'Modelo', key: 'modelo', width: 16 },
+              { header: 'N° Serie', key: 'serie', width: 18, isTextFormat: true },
+              { header: 'Color', key: 'color', width: 12 },
+              { header: 'Lote', key: 'lote_etiqueta', width: 16, isLote: true },
+              { header: 'Color Lote', key: 'lote_color', width: 14 },
+              { header: 'Conservación', key: 'estado_conservacion', width: 14 },
+              { header: 'Estado Operativo', key: 'estado_operativo', width: 18, isEstado: true },
+              { header: 'ID Ambiente', key: 'ambiente_id', width: 20 },
+              { header: 'Detalle Ubicación', key: 'ubicacion_detalle', width: 22 },
+              { header: 'Observaciones', key: 'observacion', width: 32 },
+            ],
+            datos: bienesData,
+          },
+          {
+            nombre: 'Traslados',
+            columnas: [
+              { header: 'ID Traslado', key: 'id', width: 20, isTextFormat: true },
+              { header: 'Lote Traslado', key: 'lote_id', width: 18, isTextFormat: true },
+              { header: 'Fecha Movimiento', key: 'fecha_movimiento', width: 22 },
+              { header: 'ID Bien', key: 'bien_id', width: 20, isTextFormat: true },
+              { header: 'Código Patrimonial', key: 'codigo_patrimonial', width: 18, isTextFormat: true },
+              { header: 'Etiqueta QR', key: 'etiqueta_interna', width: 14, isTextFormat: true },
+              { header: 'Denominación', key: 'denominacion', width: 28 },
+              { header: 'ID Ambiente Origen', key: 'ambiente_origen_id', width: 20 },
+              { header: 'ID Ambiente Destino', key: 'ambiente_destino_id', width: 20 },
+              { header: 'Detalle Destino', key: 'ubicacion_detalle_destino', width: 22 },
+              { header: 'Motivo', key: 'motivo', width: 30 },
+              { header: 'Responsable Entrega', key: 'responsable_entrega', width: 22 },
+              { header: 'Responsable Recepción', key: 'responsable_recepcion', width: 22 },
+              { header: 'Operador Email', key: 'usuario_email', width: 24 },
+            ],
+            datos: movData.map((m) => ({
+              ...m,
+              fecha_movimiento: m.fecha_movimiento
+                ? new Date(m.fecha_movimiento).toLocaleString('es-PE')
+                : '—',
+            })),
+          },
+          {
+            nombre: 'Mantenimientos',
+            columnas: [
+              { header: 'ID Mantenimiento', key: 'id', width: 20, isTextFormat: true },
+              { header: 'ID Bien', key: 'bien_id', width: 20, isTextFormat: true },
+              { header: 'Código Patrimonial', key: 'codigo_patrimonial', width: 18, isTextFormat: true },
+              { header: 'Etiqueta QR', key: 'etiqueta_interna', width: 14, isTextFormat: true },
+              { header: 'Denominación', key: 'denominacion', width: 28 },
+              { header: 'Tipo', key: 'tipo', width: 14 },
+              { header: 'Fecha Inicio', key: 'fecha_inicio', width: 16 },
+              { header: 'Fecha Fin', key: 'fecha_fin', width: 16 },
+              { header: 'Técnico', key: 'tecnico', width: 20 },
+              { header: 'Falla', key: 'descripcion_falla', width: 30 },
+              { header: 'Trabajo Realizado', key: 'trabajo_realizado', width: 30 },
+              { header: 'Repuestos', key: 'repuestos', width: 20 },
+              { header: 'Conservación Resultante', key: 'estado_conservacion_resultante', width: 16 },
+              { header: 'Estado Operativo Resultante', key: 'estado_operativo_resultante', width: 18, isEstado: true },
+              { header: 'Cerrado', key: 'cerrado_str', width: 12 },
+            ],
+            datos: mantData.map((m) => ({
+              ...m,
+              fecha_inicio: m.fecha_inicio ? new Date(m.fecha_inicio).toLocaleDateString('es-PE') : '—',
+              fecha_fin: m.fecha_fin ? new Date(m.fecha_fin).toLocaleDateString('es-PE') : '—',
+              cerrado_str: m.cerrado ? 'SÍ' : 'NO',
+            })),
+          },
+          {
+            nombre: 'Prestamos',
+            columnas: [
+              { header: 'ID Préstamo', key: 'id', width: 20, isTextFormat: true },
+              { header: 'Tipo', key: 'tipo', width: 12 },
+              { header: 'ID Docente', key: 'docente_id', width: 18 },
+              { header: 'Docente Nombre', key: 'docente_nombre', width: 26 },
+              { header: 'ID Área', key: 'area_id', width: 16 },
+              { header: 'Área Nombre', key: 'area_nombre', width: 22 },
+              { header: 'Grado y Sección', key: 'grado_seccion', width: 16 },
+              { header: 'Ambiente de Uso', key: 'ambiente_uso', width: 20 },
+              { header: 'Cantidad Equipos', key: 'cantidad_equipos', width: 12 },
+              { header: 'Equipos IDs', key: 'equipos_ids', width: 30 },
+              { header: 'Accesorios', key: 'accesorios_entregados', width: 20 },
+              { header: 'Fecha Salida', key: 'fecha_salida', width: 20 },
+              { header: 'Fecha Devolución Estimada', key: 'fecha_devolucion_estimada', width: 20 },
+              { header: 'Fecha Devolución Real', key: 'fecha_devolucion_real', width: 20 },
+              { header: 'Estado', key: 'estado', width: 16, isEstado: true },
+              { header: 'Observación Retorno', key: 'observacion_retorno', width: 28 },
+            ],
+            datos: prestData.map((p) => ({
+              ...p,
+              cantidad_equipos: p.cantidad_equipos || p.bienes_ids?.length || 0,
+              equipos_ids: (p.bienes_ids || []).join(', '),
+              fecha_salida: p.fecha_salida ? new Date(p.fecha_salida).toLocaleString('es-PE') : '',
+              fecha_devolucion_estimada: p.fecha_devolucion_estimada
+                ? new Date(p.fecha_devolucion_estimada).toLocaleString('es-PE')
+                : '',
+              fecha_devolucion_real: p.fecha_devolucion_real
+                ? new Date(p.fecha_devolucion_real).toLocaleString('es-PE')
+                : '',
+            })),
+          },
+          {
+            nombre: 'Docentes',
+            columnas: [
+              { header: 'ID Docente', key: 'id', width: 18, isTextFormat: true },
+              { header: 'DNI', key: 'dni', width: 14, isTextFormat: true },
+              { header: 'Nombres y Apellidos', key: 'nombres_apellidos', width: 28 },
+              { header: 'Especialidad', key: 'especialidad', width: 22 },
+              { header: 'ID Área Principal', key: 'area_principal_id', width: 18 },
+              { header: 'Celular', key: 'celular', width: 16, isTextFormat: true },
+              { header: 'Email', key: 'email', width: 24 },
+              { header: 'Activo', key: 'activo_str', width: 10 },
+            ],
+            datos: docData.map((d) => ({ ...d, activo_str: d.activo ? 'SÍ' : 'NO' })),
+          },
+          {
+            nombre: 'Ambientes',
+            columnas: [
+              { header: 'ID Ambiente', key: 'id', width: 18, isTextFormat: true },
+              { header: 'Nombre', key: 'nombre', width: 24 },
+              { header: 'Encargado', key: 'encargado', width: 24 },
+              { header: 'Descripción', key: 'descripcion', width: 30 },
+              { header: 'Permite Préstamo (AIP)', key: 'permite_prestamo_str', width: 18 },
+              { header: 'Activo', key: 'activo_str', width: 10 },
+            ],
+            datos: ambData.map((a) => ({
+              ...a,
+              permite_prestamo_str: a.permite_prestamo ? 'SÍ' : 'NO',
+              activo_str: a.activo ? 'SÍ' : 'NO',
+            })),
+          },
+          {
+            nombre: 'Categorias',
+            columnas: [
+              { header: 'ID Categoría', key: 'id', width: 18, isTextFormat: true },
+              { header: 'Nombre', key: 'nombre', width: 24 },
+              { header: 'Prefijo Etiqueta', key: 'prefijo_etiqueta', width: 18 },
+              { header: 'Activo', key: 'activo_str', width: 10 },
+            ],
+            datos: catData.map((c) => ({ ...c, activo_str: c.activo ? 'SÍ' : 'NO' })),
+          },
+          {
+            nombre: 'Areas',
+            columnas: [
+              { header: 'ID Área', key: 'id', width: 18, isTextFormat: true },
+              { header: 'Nombre', key: 'nombre', width: 28 },
+              { header: 'Activo', key: 'activo_str', width: 10 },
+            ],
+            datos: areasData.map((ar) => ({ ...ar, activo_str: ar.activo ? 'SÍ' : 'NO' })),
+          },
+          {
+            nombre: 'Bloques',
+            columnas: [
+              { header: 'ID Bloque', key: 'id', width: 18, isTextFormat: true },
+              { header: 'Nombre', key: 'nombre', width: 24 },
+              { header: 'Descripción', key: 'descripcion', width: 30 },
+              { header: 'Código QR Lote', key: 'codigo_qr_lote', width: 20, isTextFormat: true },
+              { header: 'Total Bienes', key: 'total_bienes', width: 14 },
+              { header: 'IDs Bienes', key: 'bienes_ids_str', width: 35 },
+              { header: 'Activo', key: 'activo_str', width: 10 },
+            ],
+            datos: bloqData.map((bl) => ({
+              ...bl,
+              total_bienes: (bl.bienes_ids || []).length,
+              bienes_ids_str: (bl.bienes_ids || []).join(', '),
+              activo_str: bl.activo ? 'SÍ' : 'NO',
+            })),
+          },
+        ],
+      });
 
       // Registrar evento en auditoría inmutable
       await auditoriaRepository.registrar({

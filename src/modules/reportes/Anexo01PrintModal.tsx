@@ -1,6 +1,13 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { X, Printer } from 'lucide-react';
-import { BienPatrimonial, Ambiente, CategoriaEquipo, InstitucionConfig } from '@/types';
+import {
+  BienPatrimonial,
+  Ambiente,
+  CategoriaEquipo,
+  InstitucionConfig,
+  formatearNombreIE,
+  compararBienesDeterminista,
+} from '@/types';
 
 interface Anexo01PrintModalProps {
   isOpen: boolean;
@@ -40,12 +47,16 @@ export const Anexo01PrintModal: React.FC<Anexo01PrintModalProps> = ({
 
   const dre = (config?.dre || 'AMAZONAS').toUpperCase().replace(/^DRE\s+/i, '');
   const ugel = (config?.ugel || 'BAGUA').toUpperCase().replace(/^UGEL\s+/i, '');
-  const nombreIe = config?.nombre_ie || 'MANUEL ANTONIO MESONES MURO';
+  const nombreIe = formatearNombreIE(config?.nombre_ie);
   const nivel = config?.nivel || 'SECUNDARIA';
   const lugar = config?.lugar || 'BAGUA';
   const distrito = config?.distrito || 'BAGUA';
   const responsable = config?.responsable_nombre || 'RESPONSABLE AIP';
   const dni = config?.responsable_dni || '';
+
+  const bienesOrdenados = useMemo(() => {
+    return [...bienes].sort(compararBienesDeterminista);
+  }, [bienes]);
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4">
@@ -173,7 +184,7 @@ export const Anexo01PrintModal: React.FC<Anexo01PrintModalProps> = ({
                 )}
                 <p>
                   <strong>Total Ítems:</strong>{' '}
-                  <span className="font-bold text-emerald-700">{bienes.length}</span>
+                  <span className="font-bold text-emerald-700">{bienesOrdenados.length}</span>
                 </p>
               </div>
             </div>
@@ -200,14 +211,14 @@ export const Anexo01PrintModal: React.FC<Anexo01PrintModalProps> = ({
               </tr>
             </thead>
             <tbody>
-              {bienes.length === 0 ? (
+              {bienesOrdenados.length === 0 ? (
                 <tr>
                   <td colSpan={14} className="border border-slate-400 p-4 text-center text-slate-400">
                     No hay bienes que coincidan con los filtros seleccionados.
                   </td>
                 </tr>
               ) : (
-                bienes.map((b, idx) => (
+                bienesOrdenados.map((b, idx) => (
                   <tr
                     key={b.id}
                     className={`border border-slate-400 ${

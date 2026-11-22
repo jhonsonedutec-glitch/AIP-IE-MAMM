@@ -5,6 +5,7 @@ import {
   Prestamo,
   MantenimientoRegistro,
   InstitucionConfig,
+  formatearNombreIE,
 } from '@/types';
 
 interface ResumenEjecutivoPrintModalProps {
@@ -36,7 +37,7 @@ export const ResumenEjecutivoPrintModal: React.FC<ResumenEjecutivoPrintModalProp
 
   const dre = (config?.dre || 'AMAZONAS').toUpperCase().replace(/^DRE\s+/i, '');
   const ugel = (config?.ugel || 'BAGUA').toUpperCase().replace(/^UGEL\s+/i, '');
-  const nombreIe = config?.nombre_ie || 'MANUEL ANTONIO MESONES MURO';
+  const nombreIe = formatearNombreIE(config?.nombre_ie);
   const nivel = config?.nivel || 'SECUNDARIA';
   const lugar = config?.lugar || 'BAGUA';
   const distrito = config?.distrito || 'BAGUA';

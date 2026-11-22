@@ -1,5 +1,4 @@
 import React, { useState, useMemo } from 'react';
-import * as XLSX from 'xlsx';
 import {
   FileSpreadsheet,
   Printer,
@@ -12,9 +11,10 @@ import {
   Ambiente,
   CategoriaEquipo,
   InstitucionConfig,
-  compararEtiquetasNatural,
+  compararBienesDeterminista,
 } from '@/types';
 import { Anexo01PrintModal } from './Anexo01PrintModal';
+import { generarExcelProfesional, ColumnaReporteExcel } from '@/utils/excelProfesional';
 
 interface InventarioOficialTabProps {
   bienes: BienPatrimonial[];
@@ -70,7 +70,7 @@ export const InventarioOficialTab: React.FC<InventarioOficialTabProps> = ({
 
         return true;
       })
-      .sort((a, b) => compararEtiquetasNatural(a.etiqueta_interna, b.etiqueta_interna));
+      .sort(compararBienesDeterminista);
   }, [
     bienes,
     filtroAmbiente,
@@ -103,101 +103,75 @@ export const InventarioOficialTab: React.FC<InventarioOficialTabProps> = ({
     return categorias.find((c) => c.id === catId)?.nombre || 'General';
   };
 
-  // Exportar Excel Oficial Anexo 01
-  const handleExportarExcel = () => {
-    const dre = (config?.dre || 'AMAZONAS').toUpperCase().replace(/^DRE\s+/i, '');
-    const ugel = (config?.ugel || 'BAGUA').toUpperCase().replace(/^UGEL\s+/i, '');
-    const nombreIe = config?.nombre_ie || 'MANUEL ANTONIO MESONES MURO';
-    const nivel = config?.nivel || 'SECUNDARIA';
-    const lugar = config?.lugar || 'BAGUA';
-    const distrito = config?.distrito || 'BAGUA';
-    const responsable = config?.responsable_nombre || 'RESPONSABLE AIP';
-    const dni = config?.responsable_dni || '';
-    const fechaEmision = `${new Date().toLocaleDateString('es-PE')} ${new Date().toLocaleTimeString('es-PE')}`;
+  const [exportandoExcel, setExportandoExcel] = useState(false);
 
-    // Filas de Cabecera Oficial Anexo 01
-    const aoa: any[][] = [
-      ['GOBIERNO REGIONAL DE AMAZONAS'],
-      [`DIRECCIÓN REGIONAL DE EDUCACIÓN - DRE ${dre} | UGEL ${ugel}`],
-      [`INSTITUCIÓN EDUCATIVA: "${nombreIe}" | NIVEL: ${nivel}`],
-      [`LUGAR: ${lugar} - DISTRITO: ${distrito}`],
-      ['INVENTARIO FÍSICO DE MÁQUINAS Y EQUIPOS - FORMATO ANEXO 01 OFICIAL'],
-      [`RESPONSABLE AIP: ${responsable} ${dni ? `(DNI: ${dni})` : ''}`],
-      [`FECHA Y HORA DE EMISIÓN: ${fechaEmision}`],
-      [`TOTAL DE ÍTEMS REPORTADOS: ${bienesFiltrados.length}`],
-      [], // Fila vacía separadora
-      [
-        'N°',
-        'Código Patrimonial',
-        'Tipo de Código',
-        'Etiqueta QR',
-        'Denominación',
-        'Categoría',
-        'Marca',
-        'Modelo',
-        'N° Serie',
-        'Color',
-        'Lote',
-        'Est. Cons.',
-        'Estado Operativo',
-        'Ubicación / Ambiente',
-        'Observaciones',
-      ],
-    ];
+  // Exportar Excel Oficial Anexo 01 con motor ExcelJS profesional
+  const handleExportarExcel = async () => {
+    setExportandoExcel(true);
+    try {
+      const fechaArchivo = new Date().toISOString().slice(0, 10).replace(/-/g, '');
 
-    // Filas de datos
-    bienesFiltrados.forEach((b, index) => {
-      const tipoCod = b.codigo_patrimonial
-        ? b.codigo_patrimonial.length === 12
-          ? 'SBN'
-          : 'PATRIMONIAL'
-        : 'INTERNO';
+      const columnas: ColumnaReporteExcel[] = [
+        { header: 'N°', key: 'index', width: 6, align: 'center' },
+        { header: 'Etiqueta QR', key: 'etiqueta_interna', width: 14, isTextFormat: true },
+        { header: 'Código Patrimonial', key: 'codigo_patrimonial', width: 18, isTextFormat: true },
+        { header: 'Tipo Código', key: 'tipo_codigo', width: 12, align: 'center' },
+        { header: 'Denominación del Bien', key: 'denominacion', width: 34 },
+        { header: 'Categoría', key: 'categoria', width: 18 },
+        { header: 'Marca', key: 'marca', width: 16 },
+        { header: 'Modelo', key: 'modelo', width: 16 },
+        { header: 'N° Serie', key: 'serie', width: 18, isTextFormat: true },
+        { header: 'Color', key: 'color', width: 12, align: 'center' },
+        { header: 'Lote / Color', key: 'lote_etiqueta', width: 16, isLote: true, align: 'center' },
+        { header: 'Est. Cons.', key: 'estado_conservacion', width: 10, align: 'center' },
+        { header: 'Estado Operativo', key: 'estado_operativo', width: 18, isEstado: true, align: 'center' },
+        { header: 'Ubicación / Ambiente', key: 'ubicacion', width: 25 },
+        { header: 'Observaciones', key: 'observacion', width: 35 },
+      ];
 
-      aoa.push([
-        index + 1,
-        b.codigo_patrimonial || 'S/C',
-        tipoCod,
-        b.etiqueta_interna || 'S/E',
-        b.denominacion,
-        getNombreCategoria(b.categoria_id),
-        b.marca || '—',
-        b.modelo || '—',
-        b.serie || 'S/N',
-        b.color || '—',
-        b.lote_etiqueta || '—',
-        b.estado_conservacion,
-        b.estado_operativo,
-        getNombreAmbiente(b.ambiente_id, b.ubicacion_detalle),
-        b.observacion || '—',
-      ]);
-    });
+      const datos = bienesFiltrados.map((b, idx) => {
+        const tipoCod =
+          b.tipo_codigo ||
+          (b.codigo_patrimonial
+            ? b.codigo_patrimonial.length === 12
+              ? 'SBN'
+              : 'PATRIMONIAL'
+            : 'INTERNO');
 
-    const worksheet = XLSX.utils.aoa_to_sheet(aoa);
+        return {
+          index: idx + 1,
+          etiqueta_interna: b.etiqueta_interna || 'S/E',
+          codigo_patrimonial: b.codigo_patrimonial || 'S/C',
+          tipo_codigo: tipoCod,
+          denominacion: b.denominacion,
+          categoria: getNombreCategoria(b.categoria_id),
+          marca: b.marca || '—',
+          modelo: b.modelo || '—',
+          serie: b.serie || 'S/N',
+          color: b.color || '—',
+          lote_etiqueta: b.lote_etiqueta || '—',
+          estado_conservacion: b.estado_conservacion,
+          estado_operativo: b.estado_operativo,
+          ubicacion: getNombreAmbiente(b.ambiente_id, b.ubicacion_detalle),
+          observacion: b.observacion || '—',
+        };
+      });
 
-    // Ajustar anchos de columnas (!cols) para lectura cómoda
-    worksheet['!cols'] = [
-      { wch: 6 }, // N°
-      { wch: 18 }, // Cód. Pat
-      { wch: 14 }, // Tipo Cód
-      { wch: 16 }, // Etiqueta QR
-      { wch: 32 }, // Denominación
-      { wch: 18 }, // Categoría
-      { wch: 16 }, // Marca
-      { wch: 16 }, // Modelo
-      { wch: 18 }, // N° Serie
-      { wch: 12 }, // Color
-      { wch: 16 }, // Lote
-      { wch: 10 }, // Est. Cons.
-      { wch: 18 }, // Estado Operativo
-      { wch: 25 }, // Ubicación
-      { wch: 35 }, // Observaciones
-    ];
-
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Anexo 01');
-
-    const fechaArchivo = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-    XLSX.writeFile(workbook, `Anexo_01_Inventario_MAMM_${fechaArchivo}.xlsx`);
+      await generarExcelProfesional({
+        tituloReporte: 'INVENTARIO FÍSICO DE MÁQUINAS Y EQUIPOS - FORMATO ANEXO 01 OFICIAL',
+        nombreHoja: 'Anexo 01 Oficial',
+        nombreArchivo: `Anexo_01_Inventario_MAMM_${fechaArchivo}.xlsx`,
+        config,
+        columnas,
+        datos,
+        incluirFirmas: true,
+        orientacion: 'landscape',
+      });
+    } catch (err) {
+      console.error('Error al exportar Excel Anexo 01:', err);
+    } finally {
+      setExportandoExcel(false);
+    }
   };
 
   return (
@@ -327,11 +301,12 @@ export const InventarioOficialTab: React.FC<InventarioOficialTabProps> = ({
           <div className="flex items-center space-x-3">
             <button
               type="button"
+              disabled={exportandoExcel}
               onClick={handleExportarExcel}
-              className="inline-flex items-center space-x-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
+              className="inline-flex items-center space-x-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
             >
               <FileSpreadsheet className="w-4 h-4" />
-              <span>Exportar Excel Oficial (.xlsx)</span>
+              <span>{exportandoExcel ? 'Generando Excel...' : 'Exportar Excel Oficial (.xlsx)'}</span>
             </button>
 
             <button

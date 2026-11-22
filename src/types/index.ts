@@ -169,6 +169,61 @@ export function compararEtiquetasNatural(a?: string, b?: string): number {
   return (a || '').localeCompare(b || '', undefined, { numeric: true, sensitivity: 'base' });
 }
 
+/**
+ * Limpia y normaliza el nombre de la Institución Educativa eliminando prefijos redundantes
+ * como "I.E.", "I.E", "IE" y comillas repetidas, para evitar "I.E. \"I.E EMBLEMÁTICA...\""
+ */
+export function formatearNombreIE(nombre?: string): string {
+  if (!nombre) return 'MANUEL ANTONIO MESONES MURO';
+  let clean = nombre.trim();
+  clean = clean.replace(/^["'«“]+|["'»”]+$/g, '').trim();
+  clean = clean.replace(/^I\.?\s*E\.?\s+/i, '').trim();
+  clean = clean.replace(/^["'«“]+|["'»”]+$/g, '').trim();
+  return clean || 'MANUEL ANTONIO MESONES MURO';
+}
+
+/**
+ * Ordenamiento determinista para inventario y reportes oficiales:
+ * 1. Prioriza bienes con etiqueta QR real (LAP-001 < LAP-080) sobre bienes sin etiqueta ("S/E").
+ * 2. Si ambos tienen etiqueta real, orden natural numérico.
+ * 3. Como criterio de desempate (ej. múltiples "S/E"), ordena por código patrimonial numérico ascendente.
+ */
+export function compararBienesDeterminista(a: BienPatrimonial, b: BienPatrimonial): number {
+  const etqA = (a.etiqueta_interna || '').trim().toUpperCase();
+  const etqB = (b.etiqueta_interna || '').trim().toUpperCase();
+
+  const esValidaA = etqA !== '' && etqA !== 'S/E' && etqA !== 'SIN ETIQUETA' && etqA !== 'S/C';
+  const esValidaB = etqB !== '' && etqB !== 'S/E' && etqB !== 'SIN ETIQUETA' && etqB !== 'S/C';
+
+  // 1. Bienes con etiqueta real van primero
+  if (esValidaA && !esValidaB) return -1;
+  if (!esValidaA && esValidaB) return 1;
+
+  // 2. Si ambos tienen etiqueta real, orden natural
+  if (esValidaA && esValidaB) {
+    const cmpEtq = etqA.localeCompare(etqB, undefined, { numeric: true, sensitivity: 'base' });
+    if (cmpEtq !== 0) return cmpEtq;
+  }
+
+  // 3. Desempate por código patrimonial ascendente numérico
+  const codA = normalizarCodigoPatrimonial(a.codigo_patrimonial);
+  const codB = normalizarCodigoPatrimonial(b.codigo_patrimonial);
+
+  if (codA && codB) {
+    const cmpCod = codA.localeCompare(codB, undefined, { numeric: true, sensitivity: 'base' });
+    if (cmpCod !== 0) return cmpCod;
+  } else if (codA && !codB) {
+    return -1;
+  } else if (!codA && codB) {
+    return 1;
+  }
+
+  // 4. Último desempate por serie
+  const serieA = (a.serie || '').trim();
+  const serieB = (b.serie || '').trim();
+  return serieA.localeCompare(serieB, undefined, { numeric: true, sensitivity: 'base' });
+}
+
 export interface MovimientoBien {
   id: string;
   bien_id: string;
