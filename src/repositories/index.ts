@@ -11,6 +11,7 @@ import { prestamoRepository } from './firestore/FirestorePrestamoRepository';
 import { docenteRepository } from './firestore/FirestoreDocenteRepository';
 import { areaCurricularRepository } from './firestore/FirestoreAreaCurricularRepository';
 import { bloqueRepository } from './firestore/FirestoreBloqueRepository';
+import { verificacionRepository } from './firestore/FirestoreVerificacionRepository';
 
 // Exportación de instancias desacopladas
 export {
@@ -26,6 +27,7 @@ export {
   docenteRepository,
   areaCurricularRepository,
   bloqueRepository,
+  verificacionRepository,
 };
 
 export * from './interfaces';

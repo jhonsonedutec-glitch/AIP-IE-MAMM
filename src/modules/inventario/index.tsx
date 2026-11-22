@@ -29,20 +29,30 @@ import {
   normalizarCodigoPatrimonial,
   normalizarSerie,
   compararBienesDeterminista,
+  InstitucionConfig,
 } from '@/types';
-import { bienRepository, ambienteRepository, categoriaRepository } from '@/repositories';
+import {
+  bienRepository,
+  ambienteRepository,
+  categoriaRepository,
+  configuracionRepository,
+} from '@/repositories';
 import { useAuth } from '@/hooks';
 import { BienFormModal } from './BienFormModal';
 import { BienDetalleModal } from './BienDetalleModal';
 import { BajaBienModal } from './BajaBienModal';
 import { ImportadorInventarioModal } from './ImportadorInventarioModal';
 import { ModalLimpiezaDuplicados } from './ModalLimpiezaDuplicados';
+import { VerificacionQRTab } from './VerificacionQRTab';
 
 const ITEMS_POR_PAGINA = 20;
 
 export const InventarioModule: React.FC = () => {
   const { user, perfil } = useAuth();
   const esAdmin = perfil?.rol === 'ADMIN';
+
+  const [tabInventario, setTabInventario] = useState<'CATALOGO' | 'VERIFICACION'>('CATALOGO');
+  const [institucionConfig, setInstitucionConfig] = useState<InstitucionConfig | null>(null);
 
   const [bienes, setBienes] = useState<BienPatrimonial[]>([]);
   const [ambientes, setAmbientes] = useState<Ambiente[]>([]);
@@ -93,14 +103,16 @@ export const InventarioModule: React.FC = () => {
   const cargarDatos = async () => {
     setLoading(true);
     try {
-      const [bienesData, ambData, catData] = await Promise.all([
+      const [bienesData, ambData, catData, configData] = await Promise.all([
         bienRepository.listar(),
         ambienteRepository.listar(),
         categoriaRepository.listar(),
+        configuracionRepository.obtenerInstitucion(),
       ]);
       setBienes(bienesData);
       setAmbientes(ambData);
       setCategorias(catData);
+      setInstitucionConfig(configData);
     } catch (err: any) {
       console.error('Error al cargar inventario:', err);
       setFeedback({ tipo: 'err', msg: 'Error al consultar inventario patrimonial.' });
@@ -461,6 +473,45 @@ export const InventarioModule: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Navegación por Pestañas del Módulo */}
+      <div className="flex items-center space-x-2 border-b border-slate-200 pb-3">
+        <button
+          type="button"
+          onClick={() => setTabInventario('CATALOGO')}
+          className={`px-4 py-2 text-xs font-bold rounded-xl transition-all flex items-center space-x-2 cursor-pointer ${
+            tabInventario === 'CATALOGO'
+              ? 'bg-slate-900 text-white shadow-xs'
+              : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+          }`}
+        >
+          <Box className="w-4 h-4 text-emerald-400" />
+          <span>Catálogo Patrimonial ({bienes.filter((b) => b.estado_operativo !== 'DE_BAJA').length})</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setTabInventario('VERIFICACION')}
+          className={`px-4 py-2 text-xs font-bold rounded-xl transition-all flex items-center space-x-2 cursor-pointer ${
+            tabInventario === 'VERIFICACION'
+              ? 'bg-emerald-700 text-white shadow-xs'
+              : 'bg-white text-slate-600 hover:bg-emerald-50 border border-slate-200'
+          }`}
+        >
+          <QrCode className="w-4 h-4 text-emerald-300" />
+          <span>Verificación Física QR</span>
+        </button>
+      </div>
+
+      {tabInventario === 'VERIFICACION' ? (
+        <VerificacionQRTab
+          bienes={bienes}
+          ambientes={ambientes}
+          categorias={categorias}
+          config={institucionConfig}
+        />
+      ) : (
+        <>
 
       {feedback && (
         <div
@@ -1082,6 +1133,8 @@ export const InventarioModule: React.FC = () => {
           </div>
         )}
       </div>
+      </>
+      )}
 
       {/* MODALES */}
       {modalFormOpen && (

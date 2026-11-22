@@ -1,5 +1,5 @@
 import ExcelJS from 'exceljs';
-import { InstitucionConfig, formatearNombreIE } from '@/types';
+import { InstitucionConfig, formatearNombreIE, VerificacionInventario } from '@/types';
 
 export interface ColumnaReporteExcel {
   header: string;
@@ -142,6 +142,41 @@ function aplicarEstilosSemanticos(
         fgColor: { argb: 'FFFEE2E2' },
       };
       cell.font = { name: 'Calibri', size: 9, bold: true, color: { argb: 'FF991B1B' } };
+    } else if (str === 'VERIFICADO_CONFORME') {
+      cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFDCFCE7' }, // Verde esmeralda suave
+      };
+      cell.font = { name: 'Calibri', size: 9, bold: true, color: { argb: 'FF166534' } };
+    } else if (str === 'AUSENTE_JUSTIFICADO') {
+      cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFDBEAFE' }, // Azul suave
+      };
+      cell.font = { name: 'Calibri', size: 9, bold: true, color: { argb: 'FF1E40AF' } };
+    } else if (str === 'FALTANTE') {
+      cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFFEE2E2' }, // Rojo suave
+      };
+      cell.font = { name: 'Calibri', size: 9, bold: true, color: { argb: 'FF991B1B' } };
+    } else if (str === 'FUERA_DE_UBICACION') {
+      cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFFEF3C7' }, // Ámbar suave
+      };
+      cell.font = { name: 'Calibri', size: 9, bold: true, color: { argb: 'FF92400E' } };
+    } else if (str === 'DESCONOCIDO') {
+      cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFF3E8FF' }, // Morado suave
+      };
+      cell.font = { name: 'Calibri', size: 9, bold: true, color: { argb: 'FF6B21A8' } };
     }
   }
 }
@@ -588,6 +623,347 @@ export async function generarBackupConsolidadoExcel(opciones: {
   const anchor = document.createElement('a');
   anchor.href = url;
   anchor.download = nombreArchivo.endsWith('.xlsx') ? nombreArchivo : `${nombreArchivo}.xlsx`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * Genera el archivo Excel multi-hoja oficial para una Verificación Física y Conciliación de Inventario QR
+ * Hojas:
+ * 1) Resumen_Auditoria: datos del acta, alcance, operador, fechas, % conformidad y tabla resumen de las 5 categorías.
+ * 2) Conciliacion_Completa: todos los ítems ordenados por estado y correlativo, semáforo de colores, hora y novedad física.
+ * 3) Solo_Discrepancias: únicamente FALTANTE, FUERA_DE_UBICACION, DESCONOCIDO y equipos con novedad física.
+ */
+export async function generarExcelConciliacionInventario(
+  verificacion: VerificacionInventario,
+  config?: InstitucionConfig | null
+): Promise<void> {
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'SIGI-AIP MAMM';
+  workbook.lastModifiedBy = verificacion.operador_nombre || 'Docente Responsable AIP';
+  workbook.created = new Date();
+
+  const dre = (config?.dre || 'AMAZONAS').toUpperCase().replace(/^DRE\s+/i, '');
+  const ugel = (config?.ugel || 'BAGUA').toUpperCase().replace(/^UGEL\s+/i, '');
+  const nombreIe = formatearNombreIE(config?.nombre_ie);
+  const nivel = (config?.nivel || 'SECUNDARIA').toUpperCase();
+  const lugar = config?.lugar || 'BAGUA';
+  const distrito = config?.distrito || 'BAGUA';
+  const responsable = config?.responsable_nombre || 'DOCENTE RESPONSABLE AIP';
+  const dni = config?.responsable_dni || '';
+
+  const logoBuffer = await cargarLogoInstitucional();
+
+  // -------------------------------------------------------------
+  // HOJA 1: Resumen_Auditoria
+  // -------------------------------------------------------------
+  const wsResumen = workbook.addWorksheet('Resumen_Auditoria', {
+    pageSetup: { paperSize: 9, orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 1 },
+  });
+
+  if (logoBuffer) {
+    try {
+      const imgId = workbook.addImage({ buffer: logoBuffer, extension: 'jpeg' });
+      wsResumen.addImage(imgId, {
+        tl: { col: 0.1, row: 0.2 },
+        ext: { width: 68, height: 68 },
+        editAs: 'undefined',
+      });
+    } catch (e) {
+      console.warn('Error al incrustar logo en resumen de auditoría:', e);
+    }
+  }
+
+  // Títulos
+  wsResumen.mergeCells('B1:D1');
+  const t1 = wsResumen.getCell('B1');
+  t1.value = 'GOBIERNO REGIONAL DE AMAZONAS';
+  t1.font = { name: 'Calibri', size: 9, bold: true, color: { argb: 'FF475569' } };
+
+  wsResumen.mergeCells('B2:D2');
+  const t2 = wsResumen.getCell('B2');
+  t2.value = `DIRECCIÓN REGIONAL DE EDUCACIÓN - DRE ${dre}  |  UGEL ${ugel}`;
+  t2.font = { name: 'Calibri', size: 9, bold: true, color: { argb: 'FF334155' } };
+
+  wsResumen.mergeCells('B3:D3');
+  const t3 = wsResumen.getCell('B3');
+  t3.value = `I.E. "${nombreIe}"  •  NIVEL ${nivel}  •  ${lugar} - ${distrito}`;
+  t3.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FF0F172A' } };
+
+  wsResumen.mergeCells('B4:D4');
+  const t4 = wsResumen.getCell('B4');
+  t4.value = 'INFORME DE VERIFICACIÓN FÍSICA Y CONCILIACIÓN DE INVENTARIO QR';
+  t4.font = { name: 'Calibri', size: 12, bold: true, color: { argb: 'FF065F46' } };
+
+  wsResumen.mergeCells('B5:D5');
+  const t5 = wsResumen.getCell('B5');
+  t5.value = `ACTA OFICIAL: ${verificacion.codigo_acta}  |  EMISIÓN: ${new Date().toLocaleDateString('es-PE')} ${new Date().toLocaleTimeString('es-PE')}`;
+  t5.font = { name: 'Calibri', size: 8.5, color: { argb: 'FF64748B' } };
+
+  for (let c = 1; c <= 4; c++) {
+    wsResumen.getCell(5, c).border = { bottom: { style: 'medium', color: { argb: 'FF065F46' } } };
+  }
+
+  // Tabla de Metadatos
+  wsResumen.getRow(6).height = 10;
+  wsResumen.columns = [
+    { key: 'c1', width: 28 },
+    { key: 'c2', width: 34 },
+    { key: 'c3', width: 22 },
+    { key: 'c4', width: 22 },
+  ];
+
+  const metaData = [
+    { p: 'Código de Acta', v: verificacion.codigo_acta },
+    { p: 'Alcance de Ambiente', v: verificacion.alcance_ambiente_nombre },
+    { p: 'Filtro de Categoría', v: verificacion.filtro_categoria || 'Todas las categorías' },
+    { p: 'Filtro de Lote', v: verificacion.filtro_lote || 'Todos los lotes' },
+    { p: 'Operador / Auditor', v: verificacion.operador_nombre },
+    { p: 'Fecha y Hora de Inicio', v: verificacion.fecha_inicio ? new Date(verificacion.fecha_inicio).toLocaleString('es-PE') : '—' },
+    { p: 'Fecha y Hora de Cierre', v: verificacion.fecha_cierre ? new Date(verificacion.fecha_cierre).toLocaleString('es-PE') : '—' },
+    { p: 'Observaciones Generales', v: verificacion.observaciones_generales || 'Sin observaciones' },
+  ];
+
+  let rIdx = 7;
+  metaData.forEach((item) => {
+    const row = wsResumen.getRow(rIdx);
+    row.height = 20;
+    wsResumen.mergeCells(rIdx, 2, rIdx, 4);
+    const cellP = row.getCell(1);
+    const cellV = row.getCell(2);
+    cellP.value = item.p;
+    cellV.value = item.v;
+    cellP.font = { name: 'Calibri', size: 9, bold: true, color: { argb: 'FF0F172A' } };
+    cellV.font = { name: 'Calibri', size: 9, color: { argb: 'FF334155' } };
+    cellP.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };
+    const bdr = {
+      top: { style: 'thin' as const, color: { argb: 'FFE2E8F0' } },
+      bottom: { style: 'thin' as const, color: { argb: 'FFE2E8F0' } },
+      left: { style: 'thin' as const, color: { argb: 'FFE2E8F0' } },
+      right: { style: 'thin' as const, color: { argb: 'FFE2E8F0' } },
+    };
+    cellP.border = bdr;
+    cellV.border = bdr;
+    rIdx++;
+  });
+
+  rIdx++;
+
+  // Tabla Resumen de Conciliación
+  wsResumen.mergeCells(rIdx, 1, rIdx, 4);
+  const headKpi = wsResumen.getCell(rIdx, 1);
+  headKpi.value = 'CUADRO RESUMEN DE CONCILIACIÓN FÍSICA Y CONFORMIDAD';
+  headKpi.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+  headKpi.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F172A' } };
+  headKpi.alignment = { vertical: 'middle', horizontal: 'center' };
+  wsResumen.getRow(rIdx).height = 24;
+  rIdx++;
+
+  const categoriasConciliacion = [
+    { cat: 'TOTAL UNIVERSO ESPERADO', cant: verificacion.total_esperados, color: 'FF0F172A', pct: '100%' },
+    { cat: '1. VERIFICADOS CONFORMES', cant: verificacion.total_conformes, color: 'FF166534', pct: `${verificacion.porcentaje_conformidad}%` },
+    { cat: '2. AUSENTES JUSTIFICADOS (Préstamo / Mantenimiento)', cant: verificacion.total_ausentes_justificados, color: 'FF1E40AF', pct: `${verificacion.total_esperados > 0 ? Math.round((verificacion.total_ausentes_justificados / verificacion.total_esperados) * 100) : 0}%` },
+    { cat: '3. FALTANTES (No hallados en aula)', cant: verificacion.total_faltantes, color: 'FF991B1B', pct: `${verificacion.total_esperados > 0 ? Math.round((verificacion.total_faltantes / verificacion.total_esperados) * 100) : 0}%` },
+    { cat: '4. FUERA DE UBICACIÓN (En otro ambiente / De baja)', cant: verificacion.total_fuera_ubicacion, color: 'FF92400E', pct: '—' },
+    { cat: '5. DESCONOCIDOS (Código no existe en BD)', cant: verificacion.total_desconocidos, color: 'FF6B21A8', pct: '—' },
+  ];
+
+  categoriasConciliacion.forEach((c) => {
+    const row = wsResumen.getRow(rIdx);
+    row.height = 22;
+    wsResumen.mergeCells(rIdx, 1, rIdx, 2);
+    const cellCat = row.getCell(1);
+    const cellCant = row.getCell(3);
+    const cellPct = row.getCell(4);
+    cellCat.value = c.cat;
+    cellCant.value = c.cant;
+    cellPct.value = c.pct;
+    cellCat.font = { name: 'Calibri', size: 9, bold: true, color: { argb: c.color } };
+    cellCant.font = { name: 'Calibri', size: 10, bold: true, color: { argb: c.color } };
+    cellCant.alignment = { horizontal: 'center' };
+    cellPct.font = { name: 'Calibri', size: 9, bold: true, color: { argb: 'FF475569' } };
+    cellPct.alignment = { horizontal: 'center' };
+    const bdr = {
+      top: { style: 'thin' as const, color: { argb: 'FFE2E8F0' } },
+      bottom: { style: 'thin' as const, color: { argb: 'FFE2E8F0' } },
+      left: { style: 'thin' as const, color: { argb: 'FFE2E8F0' } },
+      right: { style: 'thin' as const, color: { argb: 'FFE2E8F0' } },
+    };
+    cellCat.border = bdr;
+    cellCant.border = bdr;
+    cellPct.border = bdr;
+    rIdx++;
+  });
+
+  // Firmas institucionales en Resumen
+  rIdx += 4;
+  wsResumen.mergeCells(rIdx, 1, rIdx, 2);
+  wsResumen.mergeCells(rIdx, 3, rIdx, 4);
+  const f1 = wsResumen.getCell(rIdx, 1);
+  const f2 = wsResumen.getCell(rIdx, 3);
+  f1.value = `_____________________________________\n${responsable}\nDOCENTE RESPONSABLE AIP\nDNI: ${dni || '____________'}`;
+  f2.value = `_____________________________________\nDIRECCIÓN GENERAL\nI.E. "${nombreIe}"\nV° B° COMISIÓN DE INVENTARIO`;
+  f1.font = { name: 'Calibri', size: 8.5, bold: true, color: { argb: 'FF334155' } };
+  f2.font = { name: 'Calibri', size: 8.5, bold: true, color: { argb: 'FF334155' } };
+  f1.alignment = { horizontal: 'center', wrapText: true };
+  f2.alignment = { horizontal: 'center', wrapText: true };
+  wsResumen.getRow(rIdx).height = 45;
+
+  // -------------------------------------------------------------
+  // HOJA 2: Conciliacion_Completa & HOJA 3: Solo_Discrepancias
+  // -------------------------------------------------------------
+  const colsTabla: ColumnaReporteExcel[] = [
+    { header: 'N°', key: 'index', width: 6, align: 'center' },
+    { header: 'Estado Conciliación', key: 'estado_conciliacion', width: 22, align: 'center', isEstado: true },
+    { header: 'Etiqueta / QR', key: 'etiqueta_interna', width: 14, align: 'center' },
+    { header: 'Código Patrimonial', key: 'codigo_patrimonial', width: 20, isTextFormat: true },
+    { header: 'Denominación', key: 'denominacion', width: 22 },
+    { header: 'Marca / Modelo', key: 'marca_modelo', width: 22 },
+    { header: 'N° Serie', key: 'numero_serie', width: 18, isTextFormat: true },
+    { header: 'Lote / Color', key: 'lote_etiqueta', width: 16, isLote: true },
+    { header: 'Ambiente en BD', key: 'ambiente_bd', width: 18 },
+    { header: 'Estado BD', key: 'estado_operativo_bd', width: 16, align: 'center', isEstado: true },
+    { header: 'Hora Escaneo', key: 'hora_escaneo', width: 14, align: 'center' },
+    { header: 'Novedad Física / Falla', key: 'novedad_fisica', width: 25 },
+    { header: 'Detalle Justificación', key: 'detalle_justificacion', width: 28 },
+  ];
+
+  const prioridadEstado: Record<string, number> = {
+    VERIFICADO_CONFORME: 1,
+    AUSENTE_JUSTIFICADO: 2,
+    FUERA_DE_UBICACION: 3,
+    FALTANTE: 4,
+    DESCONOCIDO: 5,
+  };
+
+  const itemsOrdenados = [...verificacion.items].sort((a, b) => {
+    const prioA = prioridadEstado[a.estado_conciliacion] || 99;
+    const prioB = prioridadEstado[b.estado_conciliacion] || 99;
+    if (prioA !== prioB) return prioA - prioB;
+    return (a.etiqueta_interna || '').localeCompare(b.etiqueta_interna || '', undefined, { numeric: true });
+  });
+
+  const renderTablaHoja = (ws: ExcelJS.Worksheet, items: typeof verificacion.items, subtitulo: string) => {
+    ws.views = [{ state: 'frozen', xSplit: 0, ySplit: 7, activeCell: 'A8' }];
+    ws.pageSetup = { paperSize: 9, orientation: 'landscape', fitToWidth: 1 };
+
+    if (logoBuffer) {
+      try {
+        const imgId = workbook.addImage({ buffer: logoBuffer, extension: 'jpeg' });
+        ws.addImage(imgId, { tl: { col: 0.1, row: 0.2 }, ext: { width: 68, height: 68 }, editAs: 'undefined' });
+      } catch (e) {}
+    }
+
+    const totalC = colsTabla.length;
+    ws.mergeCells(1, 3, 1, totalC);
+    const r1 = ws.getCell(1, 3);
+    r1.value = 'GOBIERNO REGIONAL DE AMAZONAS';
+    r1.font = { name: 'Calibri', size: 9, bold: true, color: { argb: 'FF475569' } };
+
+    ws.mergeCells(2, 3, 2, totalC);
+    const r2 = ws.getCell(2, 3);
+    r2.value = `DIRECCIÓN REGIONAL DE EDUCACIÓN - DRE ${dre}  |  UGEL ${ugel}`;
+    r2.font = { name: 'Calibri', size: 9, bold: true, color: { argb: 'FF334155' } };
+
+    ws.mergeCells(3, 3, 3, totalC);
+    const r3 = ws.getCell(3, 3);
+    r3.value = `I.E. "${nombreIe}"  •  NIVEL ${nivel}  •  ${lugar} - ${distrito}`;
+    r3.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FF0F172A' } };
+
+    ws.mergeCells(4, 3, 4, totalC);
+    const r4 = ws.getCell(4, 3);
+    r4.value = `VERIFICACIÓN FÍSICA QR: ${subtitulo.toUpperCase()}`;
+    r4.font = { name: 'Calibri', size: 12, bold: true, color: { argb: 'FF065F46' } };
+
+    ws.mergeCells(5, 3, 5, totalC);
+    const r5 = ws.getCell(5, 3);
+    r5.value = `ACTA: ${verificacion.codigo_acta}  |  ALCANCE: ${verificacion.alcance_ambiente_nombre}  |  AUDITOR: ${verificacion.operador_nombre}  |  TOTAL REGISTROS: ${items.length}`;
+    r5.font = { name: 'Calibri', size: 8.5, color: { argb: 'FF64748B' } };
+
+    for (let c = 1; c <= totalC; c++) {
+      ws.getCell(5, c).border = { bottom: { style: 'medium', color: { argb: 'FF065F46' } } };
+    }
+
+    ws.getRow(6).height = 8;
+
+    const hRow = ws.getRow(7);
+    hRow.height = 26;
+    colsTabla.forEach((col, idx) => {
+      const cell = hRow.getCell(idx + 1);
+      cell.value = col.header.toUpperCase();
+      cell.font = { name: 'Calibri', size: 9.5, bold: true, color: { argb: 'FFFFFFFF' } };
+      cell.alignment = { vertical: 'middle', horizontal: col.align || 'left', wrapText: true };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F172A' } };
+      cell.border = { top: { style: 'medium', color: { argb: 'FF0F172A' } }, bottom: { style: 'medium', color: { argb: 'FF0F172A' } }, left: { style: 'thin', color: { argb: 'FF334155' } }, right: { style: 'thin', color: { argb: 'FF334155' } } };
+    });
+
+    ws.autoFilter = { from: { row: 7, column: 1 }, to: { row: 7, column: totalC } };
+
+    items.forEach((item, idx) => {
+      const curRow = ws.getRow(8 + idx);
+      curRow.height = 22;
+      const esCebra = idx % 2 !== 0;
+
+      const dataRow: Record<string, any> = {
+        index: idx + 1,
+        estado_conciliacion: item.estado_conciliacion,
+        etiqueta_interna: item.etiqueta_interna || 'S/E',
+        codigo_patrimonial: item.codigo_patrimonial || 'S/C',
+        denominacion: item.denominacion || '—',
+        marca_modelo: item.marca_modelo || '—',
+        numero_serie: item.numero_serie || 'S/N',
+        lote_etiqueta: item.lote_etiqueta || '—',
+        ambiente_bd: item.ambiente_bd || '—',
+        estado_operativo_bd: item.estado_operativo_bd || '—',
+        hora_escaneo: item.hora_escaneo || '—',
+        novedad_fisica: item.novedad_fisica || '—',
+        detalle_justificacion: item.detalle_justificacion || '—',
+      };
+
+      colsTabla.forEach((col, cIdx) => {
+        const cell = curRow.getCell(cIdx + 1);
+        const val = dataRow[col.key];
+        cell.value = val;
+        cell.font = { name: 'Calibri', size: 9, color: { argb: 'FF1E293B' } };
+        cell.alignment = { vertical: 'middle', horizontal: col.align || 'left' };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: esCebra ? 'FFF8FAFC' : 'FFFFFFFF' } };
+        cell.border = { top: { style: 'thin', color: { argb: 'FFCBD5E1' } }, bottom: { style: 'thin', color: { argb: 'FFCBD5E1' } }, left: { style: 'thin', color: { argb: 'FFCBD5E1' } }, right: { style: 'thin', color: { argb: 'FFCBD5E1' } } };
+
+        if (col.isTextFormat) cell.numFmt = '@';
+        if (col.isLote) aplicarEstilosSemanticos(cell, val, 'lote');
+        else if (col.isEstado) aplicarEstilosSemanticos(cell, val, 'estado');
+      });
+    });
+
+    colsTabla.forEach((col, cIdx) => {
+      let maxLen = col.header.length;
+      items.forEach((it: any) => {
+        const len = String(it[col.key] || '').length;
+        if (len > maxLen) maxLen = len;
+      });
+      ws.getColumn(cIdx + 1).width = Math.min(45, Math.max(col.width || 12, maxLen + 3));
+    });
+  };
+
+  const wsCompleta = workbook.addWorksheet('Conciliacion_Completa');
+  renderTablaHoja(wsCompleta, itemsOrdenados, 'Padrón Consolidado de Conciliación');
+
+  const discrepancias = itemsOrdenados.filter(
+    (it) => it.estado_conciliacion !== 'VERIFICADO_CONFORME' || (it.novedad_fisica && it.novedad_fisica.trim())
+  );
+  const wsDiscrepancias = workbook.addWorksheet('Solo_Discrepancias');
+  renderTablaHoja(wsDiscrepancias, discrepancias, 'Matriz de Hallazgos y Discrepancias');
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  const blob = new Blob([buffer], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = `Acta_Conciliacion_Inventario_${verificacion.codigo_acta}.xlsx`;
   document.body.appendChild(anchor);
   anchor.click();
   document.body.removeChild(anchor);

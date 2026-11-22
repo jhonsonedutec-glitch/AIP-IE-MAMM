@@ -14,17 +14,21 @@ import { Bien, Ambiente, esAmbientePrestable } from '@/types';
 interface EscanerQRModalProps {
   isOpen: boolean;
   onClose: () => void;
-  bienesDisponibles: Bien[];
+  bienesDisponibles?: Bien[];
   ambientes?: Ambiente[];
-  onEquipoDetectado: (bien: Bien) => void;
+  onEquipoDetectado?: (bien: Bien) => void;
+  onRawScan?: (codigo: string) => void;
+  tituloPersonalizado?: string;
 }
 
 export const EscanerQRModal: React.FC<EscanerQRModalProps> = ({
   isOpen,
   onClose,
-  bienesDisponibles,
+  bienesDisponibles = [],
   ambientes,
   onEquipoDetectado,
+  onRawScan,
+  tituloPersonalizado,
 }) => {
   const containerId = 'html5qr-code-reader-modal';
 
@@ -324,6 +328,17 @@ export const EscanerQRModal: React.FC<EscanerQRModalProps> = ({
     }
     ultimoEscaneoRef.current = { codigo: codigoLimpio, timestamp: ahora };
 
+    if (onRawScan) {
+      reproducirBeep();
+      setSuccessMsg(`¡Código escaneado: ${codigoLimpio}!`);
+      setErrorMsg(null);
+      onRawScan(codigoLimpio);
+      setTimeout(() => {
+        setSuccessMsg(null);
+      }, 2000);
+      return;
+    }
+
     const bienEncontrado = bienesDisponibles.find(
       (b) =>
         (b.etiqueta_interna && b.etiqueta_interna.toUpperCase() === codigoLimpio) ||
@@ -361,7 +376,9 @@ export const EscanerQRModal: React.FC<EscanerQRModalProps> = ({
     reproducirBeep();
     setSuccessMsg(`¡Equipo detectado: ${bienEncontrado.etiqueta_interna} - ${bienEncontrado.denominacion}!`);
     setErrorMsg(null);
-    onEquipoDetectado(bienEncontrado);
+    if (onEquipoDetectado) {
+      onEquipoDetectado(bienEncontrado);
+    }
 
     setTimeout(() => {
       setSuccessMsg(null);
@@ -413,7 +430,9 @@ export const EscanerQRModal: React.FC<EscanerQRModalProps> = ({
               <Camera className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-semibold text-base leading-tight">Escáner de Código QR</h3>
+              <h3 className="font-semibold text-base leading-tight">
+                {tituloPersonalizado || 'Escáner de Código QR'}
+              </h3>
               <p className="text-xs text-slate-400">Apunta la cámara a la etiqueta del equipo</p>
             </div>
           </div>

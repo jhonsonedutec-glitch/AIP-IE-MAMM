@@ -12,6 +12,7 @@ import {
   UsuarioPerfil,
   AuditoriaLog,
   RolUsuario,
+  VerificacionInventario,
 } from '@/types';
 
 export interface IUsuarioRepository {
@@ -216,4 +217,13 @@ export interface IBloqueRepository {
   crear(bloque: Omit<BloqueEquipos, 'id'>, usuarioOperador?: OperadorInfo): Promise<string>;
   actualizar(id: string, cambios: Partial<BloqueEquipos>, usuarioOperador?: OperadorInfo): Promise<void>;
   desactivar(id: string, usuarioOperador?: OperadorInfo): Promise<void>;
+}
+
+export interface IVerificacionRepository {
+  listar(): Promise<VerificacionInventario[]>;
+  obtenerPorId(id: string): Promise<VerificacionInventario | null>;
+  registrarVerificacion(
+    verificacion: Omit<VerificacionInventario, 'id' | 'codigo_acta'>,
+    usuarioOperador?: OperadorInfo
+  ): Promise<{ id: string; codigo_acta: string }>;
 }

@@ -187,7 +187,18 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // 12. Colección de Auditoría (Logs)
+    // 12. Colección de Verificaciones de Inventario (Auditoría Física y Conciliación QR)
+    // Registros inmutables de tomas de inventario físico y conciliación contra base de datos.
+    // - Lectura: Todos los usuarios activos (isActiveUser()).
+    // - Creación: Exclusiva para administradores (isAdmin()).
+    // - Actualización y Eliminación: Estrictamente prohibido (inmutable).
+    match /verificaciones_inventario/{docId} {
+      allow read: if isActiveUser();
+      allow create: if isAdmin();
+      allow update, delete: if false;
+    }
+
+    // 13. Colección de Auditoría (Logs)
     // Trazabilidad de operaciones críticas del sistema.
     // - Lectura: Administradores y Dirección institucional.
     // - Creación: Permitida para usuarios activos al registrar eventos.

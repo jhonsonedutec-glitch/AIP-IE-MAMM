@@ -440,3 +440,61 @@ export function normalizarSerie(valor?: string): string {
 
   return res.length >= 3 ? res : '';
 }
+
+// ==========================================================
+// TIPOS PARA VERIFICACIÓN FÍSICA Y CONCILIACIÓN QR (FASE 5.5)
+// ==========================================================
+
+export type EstadoConciliacion =
+  | 'VERIFICADO_CONFORME'
+  | 'AUSENTE_JUSTIFICADO'
+  | 'FALTANTE'
+  | 'FUERA_DE_UBICACION'
+  | 'DESCONOCIDO';
+
+export interface ItemVerificacion {
+  bien_id?: string;
+  codigo_escaneado: string;
+  etiqueta_interna: string;
+  codigo_patrimonial: string;
+  denominacion: string;
+  marca_modelo: string;
+  numero_serie: string;
+  lote_etiqueta?: string;
+  lote_color?: string;
+  ambiente_bd: string;
+  estado_operativo_bd: string;
+  estado_conciliacion: EstadoConciliacion;
+  hora_escaneo?: string;
+  novedad_fisica?: string;
+  detalle_justificacion?: string;
+}
+
+export interface VerificacionInventario {
+  id: string;
+  codigo_acta: string;
+  fecha_inicio: string;
+  fecha_cierre: string;
+  alcance_ambiente_id: string; // 'TODOS' o ambiente_id
+  alcance_ambiente_nombre: string;
+  filtro_categoria?: string;
+  filtro_categoria_id?: string;
+  filtro_categoria_nombre?: string;
+  filtro_lote?: string;
+  operador_uid: string;
+  operador_nombre: string;
+  operador_email?: string;
+  auditor_id?: string;
+  auditor_nombre?: string;
+  auditor_email?: string;
+  total_esperados: number;
+  total_conformes: number;
+  total_verificados_conforme?: number;
+  total_ausentes_justificados: number;
+  total_faltantes: number;
+  total_fuera_ubicacion: number;
+  total_desconocidos: number;
+  porcentaje_conformidad: number;
+  observaciones_generales?: string;
+  items: ItemVerificacion[];
+}
