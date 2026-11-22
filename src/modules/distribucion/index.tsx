@@ -15,6 +15,7 @@ import {
   CategoriaEquipo,
   MovimientoBien,
   InstitucionConfig,
+  esAmbientePrestable,
 } from '@/types';
 import {
   bienRepository,
@@ -149,13 +150,18 @@ export const DistribucionModule: React.FC = () => {
   };
 
   const toggleCheckBien = (id: string) => {
+    const bien = bienes.find((b) => b.id === id);
+    if (bien?.estado_operativo === 'PRESTADO') return;
     setBienesCheckeados((prev) =>
       prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
     );
   };
 
   const toggleCheckTodosVisibles = () => {
-    const ids = bienesVisibles.map((b) => b.id);
+    // Solo seleccionar equipos que no se encuentren en préstamo activo
+    const ids = bienesVisibles
+      .filter((b) => b.estado_operativo !== 'PRESTADO')
+      .map((b) => b.id);
     const todosYa = ids.length > 0 && ids.every((id) => bienesCheckeados.includes(id));
     if (todosYa) {
       setBienesCheckeados((prev) => prev.filter((id) => !ids.includes(id)));
@@ -297,6 +303,14 @@ export const DistribucionModule: React.FC = () => {
                 (b) => b.ambiente_id === amb.id && b.estado_operativo !== 'DE_BAJA'
               );
               const seleccionado = ambienteSeleccionadoId === amb.id;
+              const esAIP = esAmbientePrestable(amb);
+
+              // Conteo operativo en tiempo real para ambientes AIP
+              const libresAIP = bienesDelAmbiente.filter((b) => b.estado_operativo === 'OPERATIVO').length;
+              const prestadosAIP = bienesDelAmbiente.filter((b) => b.estado_operativo === 'PRESTADO').length;
+              const enMantAIP = bienesDelAmbiente.filter(
+                (b) => b.estado_operativo === 'EN_MANTENIMIENTO'
+              ).length;
 
               // Conteo por categorías
               const conteoCategorias = categorias
@@ -338,6 +352,31 @@ export const DistribucionModule: React.FC = () => {
                         {bienesDelAmbiente.length}
                       </span>
                     </div>
+
+                    {/* Estado en tiempo real para ambientes AIP */}
+                    {esAIP && (
+                      <div
+                        className={`text-[10px] font-semibold mb-1 flex items-center space-x-1.5 ${
+                          seleccionado ? 'text-emerald-200' : 'text-slate-600'
+                        }`}
+                      >
+                        <span className={seleccionado ? 'text-emerald-300 font-bold' : 'text-emerald-700 font-bold'}>
+                          {libresAIP} libre{libresAIP !== 1 ? 's' : ''}
+                        </span>
+                        <span>&bull;</span>
+                        <span className={seleccionado ? 'text-indigo-200 font-bold' : 'text-indigo-600 font-bold'}>
+                          {prestadosAIP} en préstamo
+                        </span>
+                        {enMantAIP > 0 && (
+                          <>
+                            <span>&bull;</span>
+                            <span className={seleccionado ? 'text-rose-300 font-bold' : 'text-rose-600 font-bold'}>
+                              {enMantAIP} mant.
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    )}
 
                     <p
                       className={`text-[11px] mb-2 truncate ${
@@ -445,20 +484,21 @@ export const DistribucionModule: React.FC = () => {
                     <th className="p-3">Marca / Modelo</th>
                     <th className="p-3">N° Serie</th>
                     <th className="p-3">Ubicación Actual</th>
-                    <th className="p-3 text-center">Estado</th>
+                    <th className="p-3 text-center">Conservación</th>
+                    <th className="p-3 text-center">Estado Operativo</th>
                     {isAdmin && <th className="p-3 text-right">Acción</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {loading ? (
                     <tr>
-                      <td colSpan={9} className="p-8 text-center text-slate-400">
+                      <td colSpan={10} className="p-8 text-center text-slate-400">
                         Cargando distribución de bienes...
                       </td>
                     </tr>
                   ) : bienesVisibles.length === 0 ? (
                     <tr>
-                      <td colSpan={9} className="p-8 text-center text-slate-400">
+                      <td colSpan={10} className="p-8 text-center text-slate-400">
                         No hay equipos para mostrar en este ambiente.
                       </td>
                     </tr>
@@ -470,6 +510,7 @@ export const DistribucionModule: React.FC = () => {
                           ? `Otros (${b.ubicacion_detalle})`
                           : amb?.nombre || 'Sin asignar';
                       const checkeado = bienesCheckeados.includes(b.id);
+                      const enPrestamo = b.estado_operativo === 'PRESTADO';
 
                       return (
                         <tr
@@ -483,8 +524,14 @@ export const DistribucionModule: React.FC = () => {
                               <input
                                 type="checkbox"
                                 checked={checkeado}
+                                disabled={enPrestamo}
                                 onChange={() => toggleCheckBien(b.id)}
-                                className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                                title={
+                                  enPrestamo
+                                    ? 'Equipo en préstamo activo (no trasladable)'
+                                    : ''
+                                }
+                                className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
                               />
                             </td>
                           )}
@@ -505,16 +552,37 @@ export const DistribucionModule: React.FC = () => {
                             </span>
                           </td>
                           <td className="p-3 text-center">
-                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
                               {b.estado_conservacion}
                             </span>
+                          </td>
+                          <td className="p-3 text-center">
+                            {b.estado_operativo === 'OPERATIVO' ? (
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                OPERATIVO
+                              </span>
+                            ) : b.estado_operativo === 'PRESTADO' ? (
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-800 border border-indigo-200">
+                                PRESTADO
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                                {b.estado_operativo}
+                              </span>
+                            )}
                           </td>
                           {isAdmin && (
                             <td className="p-3 text-right">
                               <button
                                 type="button"
+                                disabled={enPrestamo}
                                 onClick={() => abrirTrasladoIndividual(b)}
-                                className="px-2.5 py-1 text-[11px] font-semibold text-emerald-700 hover:text-white hover:bg-emerald-600 border border-emerald-300 hover:border-emerald-600 rounded-md transition-colors"
+                                title={
+                                  enPrestamo
+                                    ? 'Registre primero la devolución del préstamo activo'
+                                    : 'Trasladar equipo a otro ambiente'
+                                }
+                                className="px-2.5 py-1 text-[11px] font-semibold text-emerald-700 hover:text-white hover:bg-emerald-600 disabled:bg-slate-100 disabled:text-slate-400 disabled:border-slate-200 disabled:cursor-not-allowed border border-emerald-300 hover:border-emerald-600 rounded-md transition-colors"
                               >
                                 Trasladar
                               </button>

@@ -1538,6 +1538,7 @@ export const PrestamosModule: React.FC = () => {
           bloques={bloques}
           bienes={bienes}
           ambientes={ambientes}
+          prestamosActivos={prestamosActivos}
           onRecargar={cargarDatos}
           esAdmin={esAdmin}
         />

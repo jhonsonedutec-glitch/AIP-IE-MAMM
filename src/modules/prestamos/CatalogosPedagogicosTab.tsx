@@ -11,8 +11,9 @@ import {
   AlertCircle,
   Search,
   X,
-  Laptop,
   Building2,
+  Clock,
+  CheckCircle2,
 } from 'lucide-react';
 import {
   Docente,
@@ -20,6 +21,7 @@ import {
   BloqueEquipos,
   BienPatrimonial,
   Ambiente,
+  Prestamo,
   esAmbientePrestable,
 } from '@/types';
 import {
@@ -35,6 +37,7 @@ interface CatalogosPedagogicosTabProps {
   bloques: BloqueEquipos[];
   bienes: BienPatrimonial[];
   ambientes: Ambiente[];
+  prestamosActivos?: Prestamo[];
   onRecargar: () => Promise<void>;
   esAdmin: boolean;
 }
@@ -45,6 +48,7 @@ export const CatalogosPedagogicosTab: React.FC<CatalogosPedagogicosTabProps> = (
   bloques,
   bienes,
   ambientes,
+  prestamosActivos = [],
   onRecargar,
   esAdmin,
 }) => {
@@ -383,22 +387,31 @@ export const CatalogosPedagogicosTab: React.FC<CatalogosPedagogicosTabProps> = (
       return esAmbientePrestable(amb);
     });
 
-    // Ids de bienes asignados a cualquier bloque activo
+    // 1. Libres en AIP (Disponibles ahora): bienes en ambiente prestable con OPERATIVO
+    const libresEnAIP = enAIP.filter((b) => b.estado_operativo === 'OPERATIVO');
+
+    // 2. En Préstamo / Soporte (AIP): PRESTADO o EN_MANTENIMIENTO
+    const enPrestamoOSoporte = enAIP.filter(
+      (b) =>
+        b.estado_operativo === 'PRESTADO' ||
+        b.estado_operativo === 'EN_MANTENIMIENTO'
+    );
+
+    // 3. Ids de bienes asignados a cualquier bloque activo (dentro de AIP)
     const idsEnBloquesActivos = new Set(
       bloques.filter((bl) => bl.activo !== false).flatMap((bl) => bl.bienes_ids || [])
     );
-
-    // Asignados a bloques que están actualmente en AIP
     const asignadosABloques = enAIP.filter((b) => idsEnBloquesActivos.has(b.id));
 
-    // Bienes activos distribuidos en otras oficinas (TOE, Dirección, Psicología, etc.)
+    // 4. Bienes activos distribuidos en otras oficinas (TOE, Dirección, Psicología, etc.)
     const distribuidosFuera = bienesActivos.filter((b) => {
       const amb = ambientes.find((a) => a.id === b.ambiente_id);
       return !esAmbientePrestable(amb);
     });
 
     return {
-      totalEnAIP: enAIP.length,
+      libresEnAIP: libresEnAIP.length,
+      enPrestamoOSoporte: enPrestamoOSoporte.length,
       asignadosABloques: asignadosABloques.length,
       distribuidosFuera: distribuidosFuera.length,
     };
@@ -714,32 +727,47 @@ export const CatalogosPedagogicosTab: React.FC<CatalogosPedagogicosTabProps> = (
             )}
           </div>
 
-          {/* Mini Barra Informativa con Cifras en Tiempo Real */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {/* Mini Barra Informativa con 4 KPIs Exactos en Tiempo Real */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs flex items-center space-x-3">
-              <div className="p-2.5 bg-indigo-50 text-indigo-600 rounded-lg">
-                <Laptop className="w-5 h-5" />
+              <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-lg">
+                <CheckCircle2 className="w-5 h-5" />
               </div>
-              <div>
-                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
-                  Total en AIP (Prestables)
+              <div className="min-w-0">
+                <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block truncate">
+                  Libres en AIP
                 </span>
-                <span className="text-lg font-bold text-slate-800">
-                  {metricasBloques.totalEnAIP}{' '}
-                  <span className="text-xs font-normal text-slate-400">equipos</span>
+                <span className="text-base sm:text-lg font-bold text-slate-800">
+                  {metricasBloques.libresEnAIP}{' '}
+                  <span className="text-xs font-normal text-slate-400">disponibles</span>
                 </span>
               </div>
             </div>
 
             <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs flex items-center space-x-3">
-              <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-lg">
+              <div className="p-2.5 bg-indigo-50 text-indigo-600 rounded-lg">
+                <Clock className="w-5 h-5" />
+              </div>
+              <div className="min-w-0">
+                <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block truncate">
+                  En Préstamo / Soporte
+                </span>
+                <span className="text-base sm:text-lg font-bold text-slate-800">
+                  {metricasBloques.enPrestamoOSoporte}{' '}
+                  <span className="text-xs font-normal text-slate-400">en uso</span>
+                </span>
+              </div>
+            </div>
+
+            <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs flex items-center space-x-3">
+              <div className="p-2.5 bg-purple-50 text-purple-600 rounded-lg">
                 <Layers className="w-5 h-5" />
               </div>
-              <div>
-                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
+              <div className="min-w-0">
+                <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block truncate">
                   Asignados a Bloques
                 </span>
-                <span className="text-lg font-bold text-slate-800">
+                <span className="text-base sm:text-lg font-bold text-slate-800">
                   {metricasBloques.asignadosABloques}{' '}
                   <span className="text-xs font-normal text-slate-400">equipos</span>
                 </span>
@@ -750,13 +778,13 @@ export const CatalogosPedagogicosTab: React.FC<CatalogosPedagogicosTabProps> = (
               <div className="p-2.5 bg-amber-50 text-amber-600 rounded-lg">
                 <Building2 className="w-5 h-5" />
               </div>
-              <div>
-                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
-                  Distribuidos en otras oficinas
+              <div className="min-w-0">
+                <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block truncate">
+                  Distribuidos en Oficinas
                 </span>
-                <span className="text-lg font-bold text-amber-800">
+                <span className="text-base sm:text-lg font-bold text-amber-800">
                   {metricasBloques.distribuidosFuera}{' '}
-                  <span className="text-xs font-normal text-amber-600/70">equipos (TOE, Dir...)</span>
+                  <span className="text-xs font-normal text-amber-600/70">(TOE, etc.)</span>
                 </span>
               </div>
             </div>
@@ -781,11 +809,18 @@ export const CatalogosPedagogicosTab: React.FC<CatalogosPedagogicosTabProps> = (
                   .filter((bien): bien is BienPatrimonial => !!bien);
 
                 // 1. Equipos en ambientes prestables (AIP) y no dados de baja
-                const equiposLibresAIP = bienesDelBloque.filter((bien) => {
+                const equiposAIP = bienesDelBloque.filter((bien) => {
                   if (bien.activo === false || bien.estado_operativo === 'DE_BAJA') return false;
                   const amb = ambientes.find((a) => a.id === bien.ambiente_id);
                   return esAmbientePrestable(amb);
                 });
+
+                // Clasificación operativa en tiempo real dentro del AIP
+                const disponiblesAhora = equiposAIP.filter((x) => x.estado_operativo === 'OPERATIVO');
+                const enPrestamo = equiposAIP.filter((x) => x.estado_operativo === 'PRESTADO');
+                const enSoporte = equiposAIP.filter(
+                  (x) => x.estado_operativo === 'EN_MANTENIMIENTO'
+                );
 
                 // 2. Equipos en oficinas no prestables (TOE, Dirección, etc.) o dados de baja
                 const equiposDistribuidos = bienesDelBloque.filter((bien) => {
@@ -800,12 +835,22 @@ export const CatalogosPedagogicosTab: React.FC<CatalogosPedagogicosTabProps> = (
                     className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between hover:border-indigo-300 transition-all"
                   >
                     <div>
-                      {/* Cabecera con badges diferenciados */}
+                      {/* Cabecera con badges exactos */}
                       <div className="flex items-center justify-between gap-1.5 mb-2 flex-wrap">
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
-                            {equiposLibresAIP.length} libres en AIP
+                          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            {disponiblesAhora.length} libres ahora
                           </span>
+                          {enPrestamo.length > 0 && (
+                            <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                              {enPrestamo.length} en préstamo
+                            </span>
+                          )}
+                          {enSoporte.length > 0 && (
+                            <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                              {enSoporte.length} en mantenimiento
+                            </span>
+                          )}
                           {equiposDistribuidos.length > 0 && (
                             <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
                               {equiposDistribuidos.length} distribuido{equiposDistribuidos.length > 1 ? 's' : ''}
@@ -824,30 +869,66 @@ export const CatalogosPedagogicosTab: React.FC<CatalogosPedagogicosTabProps> = (
                       <h4 className="text-sm font-bold text-slate-900 mb-1">{b.nombre}</h4>
                       <p className="text-xs text-slate-500 mb-3">{b.descripcion || 'Sin descripción'}</p>
 
-                      {/* Lista principal: renderiza ÚNICAMENTE equiposLibresAIP */}
-                      <div className="space-y-1 bg-slate-50 p-2.5 rounded-xl border border-slate-100 max-h-36 overflow-y-auto">
-                        {equiposLibresAIP.length === 0 ? (
+                      {/* Lista principal: renderiza ÚNICAMENTE equiposAIP */}
+                      <div className="space-y-1.5 bg-slate-50 p-2.5 rounded-xl border border-slate-100 max-h-40 overflow-y-auto">
+                        {equiposAIP.length === 0 ? (
                           <p className="text-[11px] text-slate-400 text-center py-3 italic">
                             Sin equipos disponibles en AIP en este bloque
                           </p>
                         ) : (
                           <>
-                            {equiposLibresAIP.slice(0, 5).map((bien) => (
-                              <div
-                                key={bien.id}
-                                className="flex items-center justify-between text-[11px] text-slate-700"
-                              >
-                                <span className="font-mono font-bold text-slate-900">
-                                  {bien.etiqueta_interna || bien.id.slice(0, 6)}
-                                </span>
-                                <span className="text-slate-500 truncate max-w-[140px]">
-                                  {bien.denominacion || 'Equipo'}
-                                </span>
-                              </div>
-                            ))}
-                            {equiposLibresAIP.length > 5 && (
+                            {equiposAIP.slice(0, 6).map((bien) => {
+                              const prestamoActivo =
+                                bien.estado_operativo === 'PRESTADO'
+                                  ? prestamosActivos?.find(
+                                      (p) => p.estado === 'ACTIVO' && p.bienes_ids.includes(bien.id)
+                                    )
+                                  : undefined;
+
+                              return (
+                                <div
+                                  key={bien.id}
+                                  className="flex items-center justify-between text-[11px] text-slate-700 py-0.5"
+                                >
+                                  <div className="flex items-center space-x-1.5 min-w-0">
+                                    <span className="font-mono font-bold text-slate-900 flex-shrink-0">
+                                      {bien.etiqueta_interna || bien.id.slice(0, 6)}
+                                    </span>
+                                    <span className="text-slate-500 truncate max-w-[120px]">
+                                      &bull; {bien.denominacion}
+                                    </span>
+                                  </div>
+
+                                  <div className="flex-shrink-0">
+                                    {bien.estado_operativo === 'OPERATIVO' ? (
+                                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                        Disponible
+                                      </span>
+                                    ) : bien.estado_operativo === 'PRESTADO' ? (
+                                      <span
+                                        className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 cursor-help"
+                                        title={
+                                          prestamoActivo
+                                            ? `Préstamo activo: ${prestamoActivo.ambiente_uso} — ${prestamoActivo.docente_nombre}`
+                                            : 'En préstamo activo'
+                                        }
+                                      >
+                                        {prestamoActivo?.ambiente_uso
+                                          ? `En préstamo • ${prestamoActivo.ambiente_uso}`
+                                          : 'En préstamo'}
+                                      </span>
+                                    ) : (
+                                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                                        Mantenimiento
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                            {equiposAIP.length > 6 && (
                               <p className="text-[10px] text-indigo-600 font-medium text-center pt-1">
-                                + {equiposLibresAIP.length - 5} equipos adicionales en AIP...
+                                + {equiposAIP.length - 6} equipos adicionales en AIP...
                               </p>
                             )}
                           </>

@@ -10,7 +10,7 @@ import {
   RefreshCw,
   Sparkles,
 } from 'lucide-react';
-import { Bien, Ambiente, CategoriaEquipo } from '@/types';
+import { Bien, Ambiente, CategoriaEquipo, esAmbientePrestable } from '@/types';
 
 interface GeneradorEtiquetasQRProps {
   bienes: Bien[];
@@ -23,6 +23,7 @@ export const GeneradorEtiquetasQR: React.FC<GeneradorEtiquetasQRProps> = ({
   ambientes,
   categorias,
 }) => {
+  const [tipoStockFiltro, setTipoStockFiltro] = useState<'TODOS' | 'AIP' | 'DISTRIBUIDOS'>('TODOS');
   const [ambienteFiltro, setAmbienteFiltro] = useState<string>('TODOS');
   const [categoriaFiltro, setCategoriaFiltro] = useState<string>('TODAS');
   const [busqueda, setBusqueda] = useState<string>('');
@@ -35,6 +36,13 @@ export const GeneradorEtiquetasQR: React.FC<GeneradorEtiquetasQRProps> = ({
     return bienes.filter((bien) => {
       if (bien.activo === false) return false;
       if (bien.estado_operativo === 'DE_BAJA') return false;
+
+      // Filtro por tipo de stock (Todos, Solo Stock AIP, Solo Distribuidos)
+      const amb = ambientes.find((a) => a.id === bien.ambiente_id);
+      const esAIP = esAmbientePrestable(amb);
+
+      if (tipoStockFiltro === 'AIP' && !esAIP) return false;
+      if (tipoStockFiltro === 'DISTRIBUIDOS' && esAIP) return false;
 
       if (ambienteFiltro !== 'TODOS' && bien.ambiente_id !== ambienteFiltro) {
         return false;
@@ -55,7 +63,7 @@ export const GeneradorEtiquetasQR: React.FC<GeneradorEtiquetasQRProps> = ({
       }
       return true;
     });
-  }, [bienes, ambienteFiltro, categoriaFiltro, busqueda]);
+  }, [bienes, ambientes, tipoStockFiltro, ambienteFiltro, categoriaFiltro, busqueda]);
 
   // Manejar selección
   const toggleSeleccion = (id: string) => {
@@ -163,6 +171,11 @@ export const GeneradorEtiquetasQR: React.FC<GeneradorEtiquetasQRProps> = ({
             background: #ffffff !important;
             padding: 3mm 4mm !important;
           }
+          .label-card-distribuido {
+            border: 2px solid #b45309 !important;
+            border-top: 4.5px solid #d97706 !important;
+            background: #fffbeb !important;
+          }
         }
       `}</style>
 
@@ -244,6 +257,44 @@ export const GeneradorEtiquetasQR: React.FC<GeneradorEtiquetasQRProps> = ({
           </div>
         </div>
 
+        {/* Pastillas de filtro rápido por tipo de stock */}
+        <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100">
+          <span className="text-xs font-semibold text-slate-500 mr-1">Filtrar por tipo:</span>
+          <button
+            type="button"
+            onClick={() => setTipoStockFiltro('TODOS')}
+            className={`px-3 py-1 text-xs font-semibold rounded-lg transition-colors ${
+              tipoStockFiltro === 'TODOS'
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+            }`}
+          >
+            Todos ({bienes.filter(b => b.activo !== false && b.estado_operativo !== 'DE_BAJA').length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setTipoStockFiltro('AIP')}
+            className={`px-3 py-1 text-xs font-semibold rounded-lg transition-colors flex items-center space-x-1.5 ${
+              tipoStockFiltro === 'AIP'
+                ? 'bg-emerald-600 text-white shadow-sm'
+                : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200'
+            }`}
+          >
+            <span>Solo Stock AIP (Préstamos)</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setTipoStockFiltro('DISTRIBUIDOS')}
+            className={`px-3 py-1 text-xs font-semibold rounded-lg transition-colors flex items-center space-x-1.5 ${
+              tipoStockFiltro === 'DISTRIBUIDOS'
+                ? 'bg-amber-600 text-white shadow-sm'
+                : 'bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-200'
+            }`}
+          >
+            <span>Solo Distribuidos (Oficinas)</span>
+          </button>
+        </div>
+
         {/* Barra de Selección Masiva */}
         <div className="flex items-center justify-between text-xs pt-1">
           <div className="flex items-center space-x-3">
@@ -283,13 +334,24 @@ export const GeneradorEtiquetasQR: React.FC<GeneradorEtiquetasQRProps> = ({
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 max-h-56 overflow-y-auto p-1">
             {bienesFiltrados.map((bien) => {
               const isSelected = seleccionados.has(bien.id);
+              const amb = ambientes.find((a) => a.id === bien.ambiente_id);
+              const esAIP = esAmbientePrestable(amb);
+              const nombreAmbiente =
+                amb?.nombre.trim().toLowerCase() === 'otros' && bien.ubicacion_detalle
+                  ? `Otros — ${bien.ubicacion_detalle}`
+                  : amb?.nombre || 'Oficina';
+
               return (
                 <div
                   key={bien.id}
                   onClick={() => toggleSeleccion(bien.id)}
                   className={`p-2.5 rounded-xl border text-xs cursor-pointer transition-all flex items-center space-x-2.5 ${
                     isSelected
-                      ? 'bg-indigo-50/70 border-indigo-400 text-indigo-900 shadow-sm'
+                      ? !esAIP
+                        ? 'bg-amber-50 border-amber-400 text-amber-950 shadow-sm'
+                        : 'bg-indigo-50/70 border-indigo-400 text-indigo-900 shadow-sm'
+                      : !esAIP
+                      ? 'bg-amber-50/40 border-amber-300 hover:border-amber-400 text-amber-900'
                       : 'bg-white border-slate-200 hover:border-slate-300 text-slate-700'
                   }`}
                 >
@@ -297,7 +359,11 @@ export const GeneradorEtiquetasQR: React.FC<GeneradorEtiquetasQRProps> = ({
                     type="checkbox"
                     checked={isSelected}
                     onChange={() => {}}
-                    className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 cursor-pointer"
+                    className={`w-4 h-4 rounded cursor-pointer ${
+                      !esAIP
+                        ? 'text-amber-600 focus:ring-amber-500'
+                        : 'text-indigo-600 focus:ring-indigo-500'
+                    }`}
                   />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center space-x-1.5">
@@ -308,7 +374,23 @@ export const GeneradorEtiquetasQR: React.FC<GeneradorEtiquetasQRProps> = ({
                         &bull; {bien.denominacion}
                       </span>
                     </div>
-                    <p className="text-[10px] text-slate-500 truncate">
+                    <div className="flex items-center space-x-1.5 mt-0.5">
+                      {!esAIP ? (
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-300 truncate">
+                          DISTRIBUIDO: {nombreAmbiente}
+                        </span>
+                      ) : (
+                        <span className="text-[9px] font-medium px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">
+                          {amb?.nombre || 'AIP'}
+                        </span>
+                      )}
+                      {bien.estado_operativo === 'PRESTADO' && (
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 border border-blue-200">
+                          En préstamo
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[10px] text-slate-500 truncate mt-0.5">
                       Cód: {bien.codigo_patrimonial || 'S/C'} &bull; {bien.marca} {bien.modelo}
                     </p>
                   </div>
@@ -345,11 +427,21 @@ export const GeneradorEtiquetasQR: React.FC<GeneradorEtiquetasQRProps> = ({
           <div className="print-label-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4">
             {bienesParaImprimir.map((bien) => {
               const qrUrl = qrDataUrls[bien.id];
+              const amb = ambientes.find((a) => a.id === bien.ambiente_id);
+              const esAIP = esAmbientePrestable(amb);
+              const nombreAmbiente =
+                amb?.nombre.trim().toLowerCase() === 'otros' && bien.ubicacion_detalle
+                  ? `Otros — ${bien.ubicacion_detalle}`
+                  : amb?.nombre || 'Oficina';
 
               return (
                 <div
                   key={bien.id}
-                  className="label-card bg-white border-2 border-dashed border-slate-300 rounded-xl p-3 flex flex-col justify-between shadow-sm relative overflow-hidden"
+                  className={`label-card bg-white border-2 border-dashed rounded-xl p-3 flex flex-col justify-between shadow-sm relative overflow-hidden ${
+                    !esAIP
+                      ? 'label-card-distribuido border-amber-400 border-t-4 border-t-amber-500 bg-amber-50/20'
+                      : 'border-slate-300'
+                  }`}
                   style={{ minHeight: '135px' }}
                 >
                   {/* Cabecera miniatura de la etiqueta */}
@@ -364,9 +456,15 @@ export const GeneradorEtiquetasQR: React.FC<GeneradorEtiquetasQRProps> = ({
                         I.E.E. MANUEL ANTONIO MESONES MURO
                       </span>
                     </div>
-                    <span className="text-[9px] font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200 uppercase">
-                      AIP BAGUA
-                    </span>
+                    {!esAIP ? (
+                      <span className="text-[9px] font-extrabold text-amber-900 bg-amber-100 px-2 py-0.5 rounded border border-amber-400 uppercase tracking-tight">
+                        ASIGNADO: {nombreAmbiente}
+                      </span>
+                    ) : (
+                      <span className="text-[9px] font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200 uppercase">
+                        {amb?.nombre || 'AIP BAGUA'}
+                      </span>
+                    )}
                   </div>
 
                   {/* Cuerpo: QR + Datos del equipo */}
@@ -390,7 +488,7 @@ export const GeneradorEtiquetasQR: React.FC<GeneradorEtiquetasQRProps> = ({
                     <div className="flex-1 min-w-0 space-y-1">
                       <div>
                         <span className="text-[9px] text-slate-400 font-semibold block uppercase leading-none">
-                          Etiqueta Interna AIP
+                          {!esAIP ? 'Etiqueta Patrimonial' : 'Etiqueta Interna AIP'}
                         </span>
                         <span className="text-xl font-extrabold text-slate-900 font-mono tracking-tight block">
                           {bien.etiqueta_interna}
@@ -416,7 +514,13 @@ export const GeneradorEtiquetasQR: React.FC<GeneradorEtiquetasQRProps> = ({
                   {/* Pie de etiqueta */}
                   <div className="mt-2 pt-1 border-t border-slate-100 flex items-center justify-between text-[9px] text-slate-400">
                     <span>Marca: {bien.marca}</span>
-                    <span>Inventario Patrimonial</span>
+                    {!esAIP ? (
+                      <span className="font-bold text-amber-900 uppercase">
+                        Uso Exclusivo de Oficina / Área
+                      </span>
+                    ) : (
+                      <span>Inventario Patrimonial</span>
+                    )}
                   </div>
                 </div>
               );
