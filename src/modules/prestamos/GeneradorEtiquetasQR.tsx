@@ -8,10 +8,11 @@ import {
   Search,
   Filter,
   RefreshCw,
-  Sparkles,
   Palette,
   X,
   CheckCircle2,
+  Scissors,
+  SlidersHorizontal,
 } from 'lucide-react';
 import {
   Bien,
@@ -49,6 +50,51 @@ export const GeneradorEtiquetasQR: React.FC<GeneradorEtiquetasQRProps> = ({
   const [qrDataUrls, setQrDataUrls] = useState<Record<string, string>>({});
   const [generandoQRs, setGenerandoQRs] = useState(false);
   const [mostrarFranjaColor, setMostrarFranjaColor] = useState<boolean>(true);
+
+  // Configuración de formato de impresión de rótulos físicos (4 a 5 por fila)
+  const [columnasImpresion, setColumnasImpresion] = useState<3 | 4 | 5>(4);
+  const [mostrarGuiasCorte, setMostrarGuiasCorte] = useState<boolean>(true);
+  const [mostrarLogo, setMostrarLogo] = useState<boolean>(true);
+
+  // Capacidad de etiquetas por hoja A4 según densidad seleccionada
+  const capacidadPorHoja = useMemo(() => {
+    switch (columnasImpresion) {
+      case 5:
+        return {
+          cols: 5,
+          rows: 8,
+          total: 40,
+          anchoMm: 38,
+          altoMm: 33,
+          label: '5 por Fila (40 / hoja)',
+          sublabel: 'Compacto • Máximo Ahorro',
+          stripeWidth: '2.8mm',
+        };
+      case 3:
+        return {
+          cols: 3,
+          rows: 6,
+          total: 18,
+          anchoMm: 63,
+          altoMm: 44,
+          label: '3 por Fila (18 / hoja)',
+          sublabel: 'Grande • Gabinetes / TVs',
+          stripeWidth: '4.5mm',
+        };
+      case 4:
+      default:
+        return {
+          cols: 4,
+          rows: 7,
+          total: 28,
+          anchoMm: 48,
+          altoMm: 38,
+          label: '4 por Fila (28 / hoja)',
+          sublabel: 'Recomendado • Laptops AIP',
+          stripeWidth: '3.5mm',
+        };
+    }
+  }, [columnasImpresion]);
 
   // Modal para asignar lote masivo a seleccionados
   const [modalAsignarLoteOpen, setModalAsignarLoteOpen] = useState(false);
@@ -147,7 +193,13 @@ export const GeneradorEtiquetasQR: React.FC<GeneradorEtiquetasQRProps> = ({
       });
   }, [bienes, seleccionados]);
 
-  // Generar QRs con qrcode.toDataURL para los seleccionados
+  // Total estimado de hojas A4 según capacidad por hoja
+  const totalHojasEstimadas = useMemo(() => {
+    if (bienesParaImprimir.length === 0) return 0;
+    return Math.ceil(bienesParaImprimir.length / capacidadPorHoja.total);
+  }, [bienesParaImprimir.length, capacidadPorHoja.total]);
+
+  // Generar QRs con qrcode.toDataURL para los seleccionados (alta resolución 240px)
   useEffect(() => {
     let cancelado = false;
 
@@ -162,7 +214,7 @@ export const GeneradorEtiquetasQR: React.FC<GeneradorEtiquetasQRProps> = ({
             // El QR contiene la etiqueta interna (ej. LAP-001) para escaneo rápido
             const textoQR = bien.etiqueta_interna || bien.codigo_patrimonial || bien.id;
             const url = await QRCode.toDataURL(textoQR, {
-              width: 160,
+              width: 240,
               margin: 1,
               errorCorrectionLevel: 'M',
               color: {
@@ -241,43 +293,115 @@ export const GeneradorEtiquetasQR: React.FC<GeneradorEtiquetasQRProps> = ({
         @media print {
           @page {
             size: A4 portrait;
-            margin: 8mm;
+            margin: 6mm 6mm;
           }
-          body {
-            margin: 0;
-            padding: 0;
-            -webkit-print-color-adjust: exact;
-            print-color-adjust: exact;
+          body, html, #root {
+            margin: 0 !important;
+            padding: 0 !important;
+            background: #ffffff !important;
+            width: 100% !important;
+            height: auto !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
           }
           .no-print {
             display: none !important;
           }
           .print-label-grid {
             display: grid !important;
-            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-            gap: 5mm !important;
             width: 100% !important;
+            box-sizing: border-box !important;
           }
+
+          /* Modo 4 columnas (Recomendado Laptops - 28 etiquetas por hoja A4: 7 filas x 4 cols) */
+          .print-grid-cols-4 {
+            grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+            gap: 2mm !important;
+          }
+          .print-grid-cols-4 .label-card {
+            height: 38mm !important;
+            max-height: 38mm !important;
+            padding: 1.8mm 2mm 1.5mm 4.5mm !important;
+          }
+          .print-grid-cols-4 .label-qr-box {
+            width: 20mm !important;
+            height: 20mm !important;
+            min-width: 20mm !important;
+          }
+          .print-grid-cols-4 .label-qr-img {
+            width: 19mm !important;
+            height: 19mm !important;
+          }
+
+          /* Modo 5 columnas (Compacto / Máximo Ahorro - 40 etiquetas por hoja A4: 8 filas x 5 cols) */
+          .print-grid-cols-5 {
+            grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+            gap: 1.5mm !important;
+          }
+          .print-grid-cols-5 .label-card {
+            height: 33mm !important;
+            max-height: 33mm !important;
+            padding: 1.2mm 1.5mm 1mm 3.8mm !important;
+          }
+          .print-grid-cols-5 .label-qr-box {
+            width: 16.5mm !important;
+            height: 16.5mm !important;
+            min-width: 16.5mm !important;
+          }
+          .print-grid-cols-5 .label-qr-img {
+            width: 15.5mm !important;
+            height: 15.5mm !important;
+          }
+
+          /* Modo 3 columnas (Grande - 18 etiquetas por hoja A4: 6 filas x 3 cols) */
+          .print-grid-cols-3 {
+            grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+            gap: 2.5mm !important;
+          }
+          .print-grid-cols-3 .label-card {
+            height: 44mm !important;
+            max-height: 44mm !important;
+            padding: 2.5mm 3mm 2mm 5.5mm !important;
+          }
+          .print-grid-cols-3 .label-qr-box {
+            width: 25mm !important;
+            height: 25mm !important;
+            min-width: 25mm !important;
+          }
+          .print-grid-cols-3 .label-qr-img {
+            width: 24mm !important;
+            height: 24mm !important;
+          }
+
           .label-card {
             page-break-inside: avoid !important;
             break-inside: avoid !important;
-            border: 1.5px dashed #94a3b8 !important;
+            box-sizing: border-box !important;
             background: #ffffff !important;
-            padding: 3mm 4mm !important;
             position: relative !important;
+            overflow: hidden !important;
+            display: flex !important;
+            flex-direction: column !important;
+            justify-content: space-between !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          .label-card-corte {
+            border: 1px dashed #94a3b8 !important;
+          }
+          .label-card-sin-corte {
+            border: 1px solid #cbd5e1 !important;
           }
           .label-color-stripe {
             position: absolute !important;
             left: 0 !important;
             top: 0 !important;
             bottom: 0 !important;
-            width: 4.5mm !important;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
           }
           .label-card-distribuido {
-            border: 2px solid #b45309 !important;
-            border-top: 4.5px solid #d97706 !important;
+            border: 1.5px solid #d97706 !important;
             background: #fffbeb !important;
           }
         }
@@ -295,7 +419,7 @@ export const GeneradorEtiquetasQR: React.FC<GeneradorEtiquetasQRProps> = ({
                 Generador de Rótulos y Etiquetas QR
               </h2>
               <p className="text-xs text-slate-500">
-                Selecciona los equipos para imprimir sus etiquetas de identificación física
+                Identificación física para computadoras y laptops con código QR de escaneo rápido
               </p>
             </div>
           </div>
@@ -326,7 +450,9 @@ export const GeneradorEtiquetasQR: React.FC<GeneradorEtiquetasQRProps> = ({
               <span>
                 {generandoQRs
                   ? 'Generando QRs...'
-                  : `Imprimir ${seleccionados.size} Etiquetas`}
+                  : `Imprimir ${seleccionados.size} Etiquetas (${totalHojasEstimadas} ${
+                      totalHojasEstimadas === 1 ? 'Hoja' : 'Hojas'
+                    })`}
               </span>
             </button>
           </div>
@@ -552,30 +678,139 @@ export const GeneradorEtiquetasQR: React.FC<GeneradorEtiquetasQRProps> = ({
         )}
       </div>
 
-      {/* VISTA PREVIA / HOJA IMPRIMIBLE DE ETIQUETAS */}
-      <div className="space-y-3">
-        <div className="no-print flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-          <div className="flex items-center space-x-2">
-            <h3 className="text-sm font-bold text-slate-800 flex items-center space-x-2">
-              <Sparkles className="w-4 h-4 text-indigo-600" />
-              <span>Vista Previa de Impresión ({bienesParaImprimir.length} etiquetas)</span>
-            </h3>
-            <span className="text-xs text-slate-500 hidden md:inline">
-              &bull; Diseño optimizado para recorte y pegado en equipos
-            </span>
+      {/* VISTA PREVIA Y CONFIGURACIÓN DEL FORMATO DE IMPRESIÓN */}
+      <div className="space-y-4">
+        {/* Barra de Configuración de Formato Físico (No se imprime) */}
+        <div className="no-print bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-4 sm:p-5 rounded-2xl shadow-lg border border-slate-800 space-y-4">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            {/* Título y descripción */}
+            <div>
+              <div className="flex items-center space-x-2">
+                <SlidersHorizontal className="w-4 h-4 text-indigo-400" />
+                <h3 className="text-sm font-bold tracking-wide">
+                  Configuración de Hoja de Impresión A4
+                </h3>
+              </div>
+              <p className="text-xs text-slate-300 mt-0.5">
+                Ajusta la densidad de columnas y filas según el tamaño físico deseado para adherir a las laptops
+              </p>
+            </div>
+
+            {/* Selector de Densidad (Columnas por fila) */}
+            <div className="flex items-center bg-slate-800/80 p-1 rounded-xl border border-slate-700/80 self-start sm:self-auto">
+              <button
+                type="button"
+                onClick={() => setColumnasImpresion(4)}
+                className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center space-x-1.5 ${
+                  columnasImpresion === 4
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'text-slate-300 hover:text-white'
+                }`}
+                title="4 rótulos por fila (~48 x 38 mm). 28 rótulos por hoja A4. Tamaño ideal para laptops."
+              >
+                <span>4 por Fila (28 / hoja)</span>
+                <span className="text-[9px] px-1.5 py-0.2 bg-indigo-500/50 rounded-full font-normal hidden sm:inline">
+                  Recomendado
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setColumnasImpresion(5)}
+                className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center space-x-1.5 ${
+                  columnasImpresion === 5
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'text-slate-300 hover:text-white'
+                }`}
+                title="5 rótulos por fila (~38 x 33 mm). 40 rótulos por hoja A4. Formato ultra compacto y económico."
+              >
+                <span>5 por Fila (40 / hoja)</span>
+                <span className="text-[9px] px-1.5 py-0.2 bg-emerald-500/50 text-emerald-200 rounded-full font-normal hidden sm:inline">
+                  Compacto
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setColumnasImpresion(3)}
+                className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center space-x-1.5 ${
+                  columnasImpresion === 3
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'text-slate-300 hover:text-white'
+                }`}
+                title="3 rótulos por fila (~63 x 44 mm). 18 rótulos por hoja A4. Formato grande para gabinetes PC o pantallas."
+              >
+                <span>3 por Fila (18 / hoja)</span>
+              </button>
+            </div>
           </div>
 
-          <label className="flex items-center space-x-2 cursor-pointer select-none text-xs text-slate-700 font-semibold bg-slate-50 hover:bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200 transition-colors self-start sm:self-auto">
-            <input
-              type="checkbox"
-              checked={mostrarFranjaColor}
-              onChange={(e) => setMostrarFranjaColor(e.target.checked)}
-              className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 cursor-pointer"
-            />
-            <span>Mostrar franja de color del lote en el QR</span>
-          </label>
+          {/* Opciones Adicionales de Estilo y Corte */}
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-800 text-xs">
+            <div className="flex flex-wrap items-center gap-4">
+              <label className="flex items-center space-x-2 cursor-pointer select-none text-slate-200 hover:text-white">
+                <input
+                  type="checkbox"
+                  checked={mostrarFranjaColor}
+                  onChange={(e) => setMostrarFranjaColor(e.target.checked)}
+                  className="w-4 h-4 text-indigo-500 rounded border-slate-700 bg-slate-800 focus:ring-indigo-400 cursor-pointer"
+                />
+                <span className="font-medium">Franja lateral de color de lote</span>
+              </label>
+
+              <label className="flex items-center space-x-2 cursor-pointer select-none text-slate-200 hover:text-white">
+                <input
+                  type="checkbox"
+                  checked={mostrarGuiasCorte}
+                  onChange={(e) => setMostrarGuiasCorte(e.target.checked)}
+                  className="w-4 h-4 text-indigo-500 rounded border-slate-700 bg-slate-800 focus:ring-indigo-400 cursor-pointer"
+                />
+                <span className="font-medium flex items-center space-x-1">
+                  <Scissors className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Líneas guía para recorte (Tijera / Guillotina)</span>
+                </span>
+              </label>
+
+              <label className="flex items-center space-x-2 cursor-pointer select-none text-slate-200 hover:text-white">
+                <input
+                  type="checkbox"
+                  checked={mostrarLogo}
+                  onChange={(e) => setMostrarLogo(e.target.checked)}
+                  className="w-4 h-4 text-indigo-500 rounded border-slate-700 bg-slate-800 focus:ring-indigo-400 cursor-pointer"
+                />
+                <span className="font-medium">Insignia institucional MAMM</span>
+              </label>
+            </div>
+
+            {/* Resumen de Hojas y Acción */}
+            <div className="flex items-center space-x-3 w-full sm:w-auto justify-between sm:justify-end">
+              <div className="text-right">
+                <span className="text-[11px] text-slate-400 block">
+                  {bienesParaImprimir.length} seleccionados &bull; {capacidadPorHoja.cols} cols &times; {capacidadPorHoja.rows} filas
+                </span>
+                <span className="text-xs font-bold text-indigo-300">
+                  {totalHojasEstimadas === 0
+                    ? '0 hojas requeridas'
+                    : `Se imprimirán en ${totalHojasEstimadas} ${
+                        totalHojasEstimadas === 1 ? 'hoja A4' : 'hojas A4'
+                      }`}
+                </span>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleImprimir}
+                disabled={bienesParaImprimir.length === 0 || generandoQRs}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center space-x-2 shrink-0"
+              >
+                <Printer className="w-4 h-4" />
+                <span>Imprimir / PDF</span>
+              </button>
+            </div>
+          </div>
         </div>
 
+        {/* CONTENEDOR DE ETIQUETAS (VISUALIZACIÓN Y IMPRESIÓN) */}
         {bienesParaImprimir.length === 0 ? (
           <div className="no-print p-12 text-center bg-white rounded-2xl border border-dashed border-slate-300">
             <QrCode className="w-12 h-12 text-slate-300 mx-auto mb-2" />
@@ -583,11 +818,19 @@ export const GeneradorEtiquetasQR: React.FC<GeneradorEtiquetasQRProps> = ({
               Ninguna etiqueta seleccionada para imprimir
             </p>
             <p className="text-xs text-slate-400 mt-1">
-              Marca las casillas arriba para generar y visualizar los rótulos.
+              Marca las casillas en la lista superior para generar y previsualizar los rótulos.
             </p>
           </div>
         ) : (
-          <div className="print-label-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4">
+          <div
+            className={`print-label-grid ${
+              columnasImpresion === 5
+                ? 'print-grid-cols-5 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2.5'
+                : columnasImpresion === 3
+                ? 'print-grid-cols-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4'
+                : 'print-grid-cols-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3'
+            }`}
+          >
             {bienesParaImprimir.map((bien) => {
               const qrUrl = qrDataUrls[bien.id];
               const amb = ambientes.find((a) => a.id === bien.ambiente_id);
@@ -600,128 +843,185 @@ export const GeneradorEtiquetasQR: React.FC<GeneradorEtiquetasQRProps> = ({
               return (
                 <div
                   key={bien.id}
-                  className={`label-card bg-white border-2 border-dashed rounded-xl p-3 flex flex-col justify-between shadow-sm relative overflow-hidden ${
+                  className={`label-card bg-white rounded-lg shadow-2xs relative overflow-hidden transition-all ${
+                    mostrarGuiasCorte ? 'label-card-corte' : 'label-card-sin-corte'
+                  } ${
                     !esAIP
-                      ? 'label-card-distribuido border-amber-400 border-t-4 border-t-amber-500 bg-amber-50/20'
-                      : 'border-slate-300'
+                      ? 'label-card-distribuido border-amber-400 bg-amber-50/20'
+                      : ''
                   }`}
-                  style={{ minHeight: '135px' }}
+                  style={{
+                    paddingLeft:
+                      mostrarFranjaColor && bien.lote_etiqueta
+                        ? columnasImpresion === 5
+                          ? '12px'
+                          : '14px'
+                        : undefined,
+                  }}
                 >
-                  {/* Franja vertical de color de lote en el lateral izquierdo (mínimo 8px) */}
+                  {/* Franja vertical de color de lote en el lateral izquierdo */}
                   {mostrarFranjaColor && bien.lote_etiqueta && (
                     <div
-                      className="label-color-stripe absolute left-0 top-0 bottom-0 w-2.5 shrink-0 z-10"
+                      className="label-color-stripe absolute left-0 top-0 bottom-0 z-10"
                       style={{
-                        width: '8px',
-                        minWidth: '8px',
+                        width: capacidadPorHoja.stripeWidth,
                         backgroundColor: bien.lote_color || '#EA580C',
                         WebkitPrintColorAdjust: 'exact',
                         printColorAdjust: 'exact',
                       }}
+                      title={`Lote: ${bien.lote_etiqueta}`}
                     />
                   )}
 
                   {/* Cabecera miniatura de la etiqueta */}
-                  <div className="flex items-center justify-between border-b border-slate-200 pb-1.5 mb-2 pl-1">
-                    <div className="flex items-center space-x-2">
-                      <img
-                        src="/logo-mamm.jpg"
-                        alt="Logo"
-                        className="w-5 h-5 object-contain flex-shrink-0"
-                      />
-                      <span className="text-[10px] font-black uppercase tracking-wider text-slate-800">
-                        I.E.E. MANUEL ANTONIO MESONES MURO
+                  <div className="flex items-center justify-between border-b border-slate-200 pb-1 mb-1 pl-0.5">
+                    <div className="flex items-center space-x-1.5 min-w-0">
+                      {mostrarLogo && (
+                        <img
+                          src="/logo-mamm.jpg"
+                          alt="Logo MAMM"
+                          className={`object-contain shrink-0 ${
+                            columnasImpresion === 5
+                              ? 'w-3 h-3'
+                              : columnasImpresion === 4
+                              ? 'w-3.5 h-3.5'
+                              : 'w-4 h-4'
+                          }`}
+                        />
+                      )}
+                      <span
+                        className={`font-black uppercase tracking-tight text-slate-800 truncate leading-none ${
+                          columnasImpresion === 5
+                            ? 'text-[6.5px]'
+                            : columnasImpresion === 4
+                            ? 'text-[7.5px]'
+                            : 'text-[9px]'
+                        }`}
+                      >
+                        {columnasImpresion === 5
+                          ? 'I.E.E. MESONES MURO'
+                          : 'I.E.E. M. A. MESONES MURO'}
                       </span>
                     </div>
 
-                    <div className="flex items-center space-x-1.5 shrink-0">
+                    <div className="flex items-center space-x-1 shrink-0 ml-1">
                       {bien.lote_etiqueta && (
                         <span
-                          className="inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[8.5px] font-black uppercase text-white shadow-2xs tracking-wider"
+                          className="inline-flex items-center px-1.5 py-0.5 rounded text-white font-extrabold uppercase tracking-wider leading-none shadow-2xs"
                           style={{
-                            backgroundColor: bien.lote_color || '#475569',
-                            color: '#ffffff',
+                            backgroundColor: bien.lote_color || '#EA580C',
+                            fontSize: columnasImpresion === 5 ? '5.5px' : '6.5px',
                             WebkitPrintColorAdjust: 'exact',
                             printColorAdjust: 'exact',
                           }}
                         >
-                          <span
-                            className="w-1.5 h-1.5 rounded-full bg-white inline-block shrink-0"
-                            style={{
-                              WebkitPrintColorAdjust: 'exact',
-                              printColorAdjust: 'exact',
-                            }}
-                          />
-                          <span>{bien.lote_etiqueta}</span>
+                          {bien.lote_etiqueta}
                         </span>
                       )}
 
-                      {!esAIP ? (
-                        <span className="text-[9px] font-extrabold text-amber-900 bg-amber-100 px-2 py-0.5 rounded border border-amber-400 uppercase tracking-tight">
-                          ASIGNADO: {nombreAmbiente}
-                        </span>
-                      ) : (
-                        <span className="text-[9px] font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200 uppercase">
-                          {amb?.nombre || 'AIP BAGUA'}
+                      {!esAIP && (
+                        <span
+                          className="bg-amber-100 text-amber-900 border border-amber-300 font-bold px-1 py-0.2 rounded uppercase leading-none truncate max-w-[65px]"
+                          style={{
+                            fontSize: columnasImpresion === 5 ? '5.5px' : '6.5px',
+                          }}
+                        >
+                          {nombreAmbiente}
                         </span>
                       )}
                     </div>
                   </div>
 
-                  {/* Cuerpo: QR + Datos del equipo */}
-                  <div className="flex items-center space-x-3">
-                    {/* Código QR */}
-                    <div className="flex-shrink-0 bg-white p-1 border border-slate-200 rounded-lg flex items-center justify-center">
+                  {/* Cuerpo: QR + Datos clave para identificación física de laptops */}
+                  <div className="flex items-center space-x-2 flex-1 min-w-0">
+                    {/* Código QR optimizado para lector de cámara y escáner USB */}
+                    <div className="label-qr-box shrink-0 bg-white p-0.5 border border-slate-200 rounded flex items-center justify-center">
                       {qrUrl ? (
                         <img
                           src={qrUrl}
                           alt={`QR ${bien.etiqueta_interna}`}
-                          className="w-20 h-20 object-contain"
+                          className="label-qr-img object-contain"
                         />
                       ) : (
-                        <div className="w-20 h-20 flex items-center justify-center text-slate-400">
-                          <RefreshCw className="w-5 h-5 animate-spin" />
+                        <div className="w-full h-full flex items-center justify-center text-slate-400">
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
                         </div>
                       )}
                     </div>
 
-                    {/* Información destacada */}
-                    <div className="flex-1 min-w-0 space-y-1">
+                    {/* Datos del bien: Identificador grande, código patrimonial y serie */}
+                    <div className="flex-1 min-w-0 space-y-0.5">
                       <div>
-                        <span className="text-[9px] text-slate-400 font-semibold block uppercase leading-none">
-                          {!esAIP ? 'Etiqueta Patrimonial' : 'Etiqueta Interna AIP'}
+                        <span
+                          className="text-slate-400 font-semibold uppercase block leading-none tracking-tight"
+                          style={{
+                            fontSize: columnasImpresion === 5 ? '5.5px' : '6.5px',
+                          }}
+                        >
+                          {!esAIP ? 'Etiqueta Área' : 'Etiqueta Interna AIP'}
                         </span>
-                        <span className="text-xl font-extrabold text-slate-900 font-mono tracking-tight block">
+                        <span
+                          className={`font-mono font-black text-slate-900 tracking-tight block leading-tight ${
+                            columnasImpresion === 5
+                              ? 'text-[11px]'
+                              : columnasImpresion === 4
+                              ? 'text-[13px]'
+                              : 'text-[15px]'
+                          }`}
+                        >
                           {bien.etiqueta_interna}
                         </span>
                       </div>
 
-                      <div className="space-y-0.5 text-[10px] text-slate-600">
-                        <p className="truncate">
-                          <b className="text-slate-800">Cód. Pat:</b>{' '}
-                          <span className="font-mono">{bien.codigo_patrimonial || 'S/C'}</span>
+                      <div className="space-y-0.2 leading-tight">
+                        <p
+                          className="truncate font-mono text-slate-700"
+                          style={{
+                            fontSize: columnasImpresion === 5 ? '6px' : '7px',
+                          }}
+                        >
+                          <strong className="text-slate-900">Cód:</strong>{' '}
+                          {bien.codigo_patrimonial || 'S/C'}
                         </p>
-                        <p className="truncate">
-                          <b className="text-slate-800">Bien:</b> {bien.denominacion}
+                        <p
+                          className="truncate text-slate-600"
+                          style={{
+                            fontSize: columnasImpresion === 5 ? '5.5px' : '6.5px',
+                          }}
+                        >
+                          <strong className="text-slate-800">Bien:</strong> {bien.denominacion}
                         </p>
-                        <p className="truncate">
-                          <b className="text-slate-800">Serie:</b>{' '}
-                          <span className="font-mono">{bien.serie || bien.numero_serie || 'S/N'}</span>
+                        <p
+                          className="truncate font-mono text-slate-500"
+                          style={{
+                            fontSize: columnasImpresion === 5 ? '5.5px' : '6.5px',
+                          }}
+                        >
+                          <strong className="text-slate-700">S/N:</strong>{' '}
+                          {bien.serie || bien.numero_serie || 'S/N'}
                         </p>
                       </div>
                     </div>
                   </div>
 
-                  {/* Pie de etiqueta */}
-                  <div className="mt-2 pt-1 border-t border-slate-100 flex items-center justify-between text-[9px] text-slate-400">
-                    <span>Marca: {bien.marca}</span>
-                    {!esAIP ? (
-                      <span className="font-bold text-amber-900 uppercase">
-                        Uso Exclusivo de Oficina / Área
-                      </span>
-                    ) : (
-                      <span>Inventario Patrimonial</span>
-                    )}
+                  {/* Pie de etiqueta con guías de corte y ambiente */}
+                  <div className="mt-1 pt-0.5 border-t border-slate-100 flex items-center justify-between text-slate-400 leading-none">
+                    <span
+                      className="truncate font-medium"
+                      style={{
+                        fontSize: columnasImpresion === 5 ? '5.5px' : '6.5px',
+                      }}
+                    >
+                      {esAIP ? (amb?.nombre || 'AIP 1') : `Ubicación: ${nombreAmbiente}`}
+                    </span>
+                    <span
+                      className="shrink-0 font-mono tracking-tight text-slate-400 ml-1"
+                      style={{
+                        fontSize: columnasImpresion === 5 ? '5.5px' : '6px',
+                      }}
+                    >
+                      {mostrarGuiasCorte ? '✂ MAMM • AIP' : 'CONTROL PATRIMONIAL'}
+                    </span>
                   </div>
                 </div>
               );

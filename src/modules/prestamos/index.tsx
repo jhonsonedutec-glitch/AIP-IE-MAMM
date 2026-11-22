@@ -533,7 +533,7 @@ export const PrestamosModule: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Encabezado del Módulo */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
+      <div className="no-print flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
         <div>
           <h1 className="text-2xl font-bold text-slate-800 flex items-center space-x-2.5">
             <QrCode className="w-7 h-7 text-indigo-600" />
@@ -557,7 +557,7 @@ export const PrestamosModule: React.FC = () => {
       </div>
 
       {/* Pestañas Principales */}
-      <div className="flex border-b border-slate-200 space-x-2 overflow-x-auto">
+      <div className="no-print flex border-b border-slate-200 space-x-2 overflow-x-auto">
         <button
           onClick={() => setTabActiva('CONTROL')}
           className={`py-3 px-5 text-xs font-bold border-b-2 transition-all flex items-center space-x-2 whitespace-nowrap ${

@@ -45,7 +45,7 @@ export const Sidebar: React.FC = () => {
   });
 
   return (
-    <aside className="w-64 bg-slate-900 text-slate-200 flex flex-col border-r border-slate-800 shrink-0 select-none">
+    <aside className="no-print w-64 bg-slate-900 text-slate-200 flex flex-col border-r border-slate-800 shrink-0 select-none">
       {/* Encabezado Institucional */}
       <div className="p-5 border-b border-slate-800">
         <div className="flex items-center space-x-3">

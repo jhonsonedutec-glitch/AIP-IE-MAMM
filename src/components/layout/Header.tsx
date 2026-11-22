@@ -6,7 +6,7 @@ export const Header: React.FC = () => {
   const { perfil, logout } = useAuth();
 
   return (
-    <header className="h-16 bg-white border-b border-slate-200 px-4 sm:px-6 flex items-center justify-between shrink-0 shadow-xs gap-3">
+    <header className="no-print h-16 bg-white border-b border-slate-200 px-4 sm:px-6 flex items-center justify-between shrink-0 shadow-xs gap-3">
       <div className="flex items-center space-x-3 min-w-0 flex-1">
         <img
           src="/logo-mamm.jpg"

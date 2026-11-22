@@ -7,3 +7,29 @@
     @apply antialiased bg-slate-50 text-slate-900;
   }
 }
+
+@media print {
+  /* Ocultar elementos estructurales y de navegación del sistema en impresión */
+  aside,
+  header,
+  nav,
+  .no-print,
+  [data-no-print] {
+    display: none !important;
+  }
+
+  /* Resetear dimensiones de ventana y scrollbars para que el navegador imprima limpio */
+  body,
+  html,
+  #root {
+    background: #ffffff !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 100% !important;
+    overflow: visible !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}
