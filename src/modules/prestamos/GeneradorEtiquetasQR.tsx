@@ -13,6 +13,10 @@ import {
   CheckCircle2,
   Scissors,
   SlidersHorizontal,
+  LayoutGrid,
+  Eye,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import {
   Bien,
@@ -55,6 +59,10 @@ export const GeneradorEtiquetasQR: React.FC<GeneradorEtiquetasQRProps> = ({
   const [columnasImpresion, setColumnasImpresion] = useState<3 | 4 | 5>(4);
   const [mostrarGuiasCorte, setMostrarGuiasCorte] = useState<boolean>(true);
   const [mostrarLogo, setMostrarLogo] = useState<boolean>(true);
+
+  // Modo de visualización en pantalla dentro de la aplicación
+  const [modoVistaApp, setModoVistaApp] = useState<'TARJETAS' | 'SIMULADOR_A4'>('TARJETAS');
+  const [paginaSimulador, setPaginaSimulador] = useState<number>(1);
 
   // Capacidad de etiquetas por hoja A4 según densidad seleccionada
   const capacidadPorHoja = useMemo(() => {
@@ -199,6 +207,19 @@ export const GeneradorEtiquetasQR: React.FC<GeneradorEtiquetasQRProps> = ({
     return Math.ceil(bienesParaImprimir.length / capacidadPorHoja.total);
   }, [bienesParaImprimir.length, capacidadPorHoja.total]);
 
+  // Equipos correspondientes a la página activa en el simulador A4
+  const itemsPaginaSimulador = useMemo(() => {
+    const inicio = (paginaSimulador - 1) * capacidadPorHoja.total;
+    return bienesParaImprimir.slice(inicio, inicio + capacidadPorHoja.total);
+  }, [bienesParaImprimir, paginaSimulador, capacidadPorHoja.total]);
+
+  // Mantener la página del simulador dentro de los límites válidos
+  useEffect(() => {
+    if (paginaSimulador > totalHojasEstimadas && totalHojasEstimadas > 0) {
+      setPaginaSimulador(totalHojasEstimadas);
+    }
+  }, [totalHojasEstimadas, paginaSimulador]);
+
   // Generar QRs con qrcode.toDataURL para los seleccionados (alta resolución 240px)
   useEffect(() => {
     let cancelado = false;
@@ -290,6 +311,11 @@ export const GeneradorEtiquetasQR: React.FC<GeneradorEtiquetasQRProps> = ({
     <div className="space-y-6">
       {/* Estilos para impresión de etiquetas A4 */}
       <style>{`
+        /* EN PANTALLA NORMAL: Ocultar el contenedor exclusivo de impresión */
+        .print-only-container {
+          display: none !important;
+        }
+
         @media print {
           @page {
             size: A4 portrait;
@@ -307,7 +333,10 @@ export const GeneradorEtiquetasQR: React.FC<GeneradorEtiquetasQRProps> = ({
           .no-print {
             display: none !important;
           }
-          .print-label-grid {
+          aside, header, nav {
+            display: none !important;
+          }
+          .print-only-container {
             display: grid !important;
             width: 100% !important;
             box-sizing: border-box !important;
@@ -810,27 +839,322 @@ export const GeneradorEtiquetasQR: React.FC<GeneradorEtiquetasQRProps> = ({
           </div>
         </div>
 
-        {/* CONTENEDOR DE ETIQUETAS (VISUALIZACIÓN Y IMPRESIÓN) */}
-        {bienesParaImprimir.length === 0 ? (
-          <div className="no-print p-12 text-center bg-white rounded-2xl border border-dashed border-slate-300">
-            <QrCode className="w-12 h-12 text-slate-300 mx-auto mb-2" />
-            <p className="text-sm font-medium text-slate-600">
-              Ninguna etiqueta seleccionada para imprimir
-            </p>
-            <p className="text-xs text-slate-400 mt-1">
-              Marca las casillas en la lista superior para generar y previsualizar los rótulos.
-            </p>
-          </div>
-        ) : (
-          <div
-            className={`print-label-grid ${
-              columnasImpresion === 5
-                ? 'print-grid-cols-5 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2.5'
-                : columnasImpresion === 3
-                ? 'print-grid-cols-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4'
-                : 'print-grid-cols-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3'
-            }`}
-          >
+        {/* ========================================================================= */}
+        {/* 1. VISTA EN PANTALLA DENTRO DE LA APLICACIÓN (no-print)                    */}
+        {/* Diseño visual compacto, legible, elegante y no invasivo en el navegador   */}
+        {/* ========================================================================= */}
+        <div className="no-print space-y-3">
+          {bienesParaImprimir.length === 0 ? (
+            <div className="p-12 text-center bg-white rounded-2xl border border-dashed border-slate-300">
+              <QrCode className="w-12 h-12 text-slate-300 mx-auto mb-2" />
+              <p className="text-sm font-medium text-slate-600">
+                Ninguna etiqueta seleccionada para previsualizar
+              </p>
+              <p className="text-xs text-slate-400 mt-1">
+                Marca las casillas en la lista superior para generar y previsualizar los rótulos.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {/* Barra de Controles de Visualización en Pantalla */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-white px-4 py-2.5 rounded-xl border border-slate-200 shadow-2xs">
+                <div className="flex items-center space-x-2">
+                  <span className="text-xs font-bold text-slate-800">
+                    Vista Previa en App ({bienesParaImprimir.length} equipos)
+                  </span>
+                  <span className="text-slate-300">|</span>
+                  <span className="text-xs text-slate-500">
+                    Salida física: <strong className="text-slate-700">{capacidadPorHoja.label}</strong> ({totalHojasEstimadas} {totalHojasEstimadas === 1 ? 'hoja A4' : 'hojas A4'})
+                  </span>
+                </div>
+
+                {/* Selector de modo de vista en la app */}
+                <div className="flex items-center space-x-1.5 self-start sm:self-auto">
+                  <button
+                    type="button"
+                    onClick={() => setModoVistaApp('TARJETAS')}
+                    className={`px-3 py-1 text-xs font-semibold rounded-lg transition-all flex items-center space-x-1.5 ${
+                      modoVistaApp === 'TARJETAS'
+                        ? 'bg-indigo-600 text-white shadow-xs'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    <LayoutGrid className="w-3.5 h-3.5" />
+                    <span>Tarjetas Compactas</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setModoVistaApp('SIMULADOR_A4')}
+                    className={`px-3 py-1 text-xs font-semibold rounded-lg transition-all flex items-center space-x-1.5 ${
+                      modoVistaApp === 'SIMULADOR_A4'
+                        ? 'bg-indigo-600 text-white shadow-xs'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    <Eye className="w-3.5 h-3.5" />
+                    <span>Simulador Hoja A4</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* MODO A: TARJETAS COMPACTAS (Diseño limpio, cómodo y perfectamente proporcionado) */}
+              {modoVistaApp === 'TARJETAS' && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
+                  {bienesParaImprimir.map((bien) => {
+                    const qrUrl = qrDataUrls[bien.id];
+                    const amb = ambientes.find((a) => a.id === bien.ambiente_id);
+                    const esAIP = esAmbientePrestable(amb);
+                    const nombreAmbiente =
+                      amb?.nombre.trim().toLowerCase() === 'otros' && bien.ubicacion_detalle
+                        ? `Otros — ${bien.ubicacion_detalle}`
+                        : amb?.nombre || 'Oficina';
+
+                    return (
+                      <div
+                        key={`app-${bien.id}`}
+                        className={`bg-white rounded-xl border transition-all p-3 relative overflow-hidden flex flex-col justify-between shadow-2xs hover:shadow-md hover:border-indigo-300 ${
+                          !esAIP
+                            ? 'border-amber-300 bg-amber-50/20'
+                            : 'border-slate-200'
+                        }`}
+                        style={{
+                          paddingLeft: mostrarFranjaColor && bien.lote_etiqueta ? '14px' : '12px',
+                          minHeight: '122px',
+                        }}
+                      >
+                        {/* Franja vertical de color de lote */}
+                        {mostrarFranjaColor && bien.lote_etiqueta && (
+                          <div
+                            className="absolute left-0 top-0 bottom-0 w-1.5 z-10"
+                            style={{ backgroundColor: bien.lote_color || '#EA580C' }}
+                            title={`Lote: ${bien.lote_etiqueta}`}
+                          />
+                        )}
+
+                        {/* Cabecera miniatura */}
+                        <div className="flex items-center justify-between pb-1.5 border-b border-slate-100 gap-2">
+                          <div className="flex items-center space-x-1.5 min-w-0">
+                            {mostrarLogo && (
+                              <img
+                                src="/logo-mamm.jpg"
+                                alt="MAMM"
+                                className="w-4 h-4 object-contain shrink-0 rounded-xs"
+                              />
+                            )}
+                            <span className="text-[11px] font-bold text-slate-800 truncate">
+                              I.E.E. Mesones Muro
+                            </span>
+                          </div>
+
+                          <div className="flex items-center space-x-1 shrink-0">
+                            {bien.lote_etiqueta && (
+                              <span
+                                className="inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[9.5px] font-black uppercase text-white shadow-2xs tracking-wide"
+                                style={{ backgroundColor: bien.lote_color || '#EA580C' }}
+                              >
+                                <span className="w-1.5 h-1.5 rounded-full bg-white shrink-0" />
+                                <span className="truncate max-w-[85px]">{bien.lote_etiqueta}</span>
+                              </span>
+                            )}
+                            {!esAIP && (
+                              <span className="text-[9.5px] font-bold text-amber-900 bg-amber-100 border border-amber-300 px-1.5 py-0.5 rounded uppercase truncate max-w-[75px]">
+                                {nombreAmbiente}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Cuerpo central: QR compacto a la izquierda + Datos legibles a la derecha */}
+                        <div className="flex items-center space-x-2.5 py-1.5">
+                          {/* QR compacto */}
+                          <div className="w-14 h-14 shrink-0 bg-white p-1 border border-slate-200 rounded-lg shadow-2xs flex items-center justify-center">
+                            {qrUrl ? (
+                              <img
+                                src={qrUrl}
+                                alt={`QR ${bien.etiqueta_interna}`}
+                                className="w-12 h-12 object-contain"
+                              />
+                            ) : (
+                              <RefreshCw className="w-4 h-4 text-slate-400 animate-spin" />
+                            )}
+                          </div>
+
+                          {/* Información del equipo */}
+                          <div className="flex-1 min-w-0 space-y-0.5">
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm font-black font-mono text-slate-900 tracking-tight">
+                                {bien.etiqueta_interna || 'S/E'}
+                              </span>
+                              <span className="text-[10px] font-medium text-slate-400 uppercase">
+                                {!esAIP ? 'Área' : 'AIP'}
+                              </span>
+                            </div>
+
+                            <p className="text-xs font-mono text-slate-700 font-semibold truncate leading-tight">
+                              <strong className="text-slate-900 font-sans">Cód:</strong> {bien.codigo_patrimonial || 'S/C'}
+                            </p>
+
+                            <p className="text-[11px] text-slate-600 truncate leading-tight">
+                              <strong className="text-slate-800">Bien:</strong> {bien.denominacion}
+                            </p>
+
+                            <p className="text-[11px] font-mono text-slate-500 truncate leading-tight">
+                              <strong className="text-slate-700 font-sans">S/N:</strong> {bien.serie || bien.numero_serie || 'S/N'}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Pie de tarjeta en pantalla */}
+                        <div className="pt-1 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-400">
+                          <span className="truncate font-medium text-slate-500">
+                            {esAIP ? (amb?.nombre || 'AIP 1') : `Ubicación: ${nombreAmbiente}`}
+                          </span>
+                          <span className="shrink-0 font-medium text-indigo-600 bg-indigo-50 px-1.5 py-0.2 rounded text-[9.5px]">
+                            Formato: {capacidadPorHoja.cols}&times;{capacidadPorHoja.rows}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* MODO B: SIMULADOR HOJA A4 (Hoja virtual a escala exacta para visualizar por página) */}
+              {modoVistaApp === 'SIMULADOR_A4' && (
+                <div className="space-y-3">
+                  {/* Controles de paginación de la hoja A4 */}
+                  <div className="flex items-center justify-between bg-white px-4 py-2 rounded-xl border border-slate-200 shadow-2xs">
+                    <button
+                      type="button"
+                      onClick={() => setPaginaSimulador((p) => Math.max(1, p - 1))}
+                      disabled={paginaSimulador === 1}
+                      className="px-3 py-1 text-xs font-semibold bg-slate-100 hover:bg-slate-200 disabled:opacity-40 rounded-lg text-slate-700 flex items-center space-x-1"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                      <span>Hoja Anterior</span>
+                    </button>
+
+                    <div className="text-xs font-bold text-slate-800 flex items-center space-x-2">
+                      <span className="px-2 py-0.5 bg-indigo-100 text-indigo-800 rounded-md">
+                        Hoja {paginaSimulador} de {totalHojasEstimadas}
+                      </span>
+                      <span className="text-slate-500 font-normal">
+                        (Equipos {(paginaSimulador - 1) * capacidadPorHoja.total + 1} al{' '}
+                        {Math.min(paginaSimulador * capacidadPorHoja.total, bienesParaImprimir.length)})
+                      </span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setPaginaSimulador((p) => Math.min(totalHojasEstimadas, p + 1))}
+                      disabled={paginaSimulador === totalHojasEstimadas}
+                      className="px-3 py-1 text-xs font-semibold bg-slate-100 hover:bg-slate-200 disabled:opacity-40 rounded-lg text-slate-700 flex items-center space-x-1"
+                    >
+                      <span>Siguiente Hoja</span>
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  {/* Hoja A4 virtual a escala */}
+                  <div className="max-w-[780px] mx-auto bg-white border border-slate-300 shadow-2xl rounded-sm p-3.5 sm:p-4 aspect-[210/297] flex flex-col justify-start overflow-hidden">
+                    <div className="text-[10px] text-slate-400 font-mono text-center pb-2 border-b border-dashed border-slate-200 mb-2">
+                      --- SIMULACIÓN HOJA A4 ({capacidadPorHoja.cols} columnas &times; {capacidadPorHoja.rows} filas &bull; Pág. {paginaSimulador}/{totalHojasEstimadas}) ---
+                    </div>
+
+                    <div
+                      className={`grid gap-1.5 flex-1 ${
+                        columnasImpresion === 5
+                          ? 'grid-cols-5'
+                          : columnasImpresion === 3
+                          ? 'grid-cols-3'
+                          : 'grid-cols-4'
+                      }`}
+                    >
+                      {itemsPaginaSimulador.map((bien) => {
+                        const qrUrl = qrDataUrls[bien.id];
+                        const amb = ambientes.find((a) => a.id === bien.ambiente_id);
+                        const esAIP = esAmbientePrestable(amb);
+
+                        return (
+                          <div
+                            key={`sim-${bien.id}`}
+                            className={`border rounded p-1 flex flex-col justify-between relative overflow-hidden bg-white text-[8px] ${
+                              mostrarGuiasCorte ? 'border-dashed border-slate-400' : 'border-slate-300'
+                            } ${!esAIP ? 'bg-amber-50/20 border-amber-400' : ''}`}
+                            style={{
+                              paddingLeft: mostrarFranjaColor && bien.lote_etiqueta ? '8px' : '4px',
+                              minHeight: columnasImpresion === 5 ? '48px' : '58px',
+                            }}
+                          >
+                            {mostrarFranjaColor && bien.lote_etiqueta && (
+                              <div
+                                className="absolute left-0 top-0 bottom-0 w-1 z-10"
+                                style={{ backgroundColor: bien.lote_color || '#EA580C' }}
+                              />
+                            )}
+
+                            <div className="flex items-center justify-between leading-none truncate border-b border-slate-100 pb-0.5">
+                              <span className="font-bold text-[7px] truncate text-slate-800">
+                                MAMM
+                              </span>
+                              {bien.lote_etiqueta && (
+                                <span
+                                  className="px-1 py-0.2 rounded text-[6px] text-white font-bold"
+                                  style={{ backgroundColor: bien.lote_color || '#EA580C' }}
+                                >
+                                  {bien.lote_etiqueta}
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="flex items-center space-x-1 my-0.5">
+                              {qrUrl ? (
+                                <img src={qrUrl} alt="" className="w-6 h-6 object-contain shrink-0" />
+                              ) : (
+                                <div className="w-6 h-6 bg-slate-100" />
+                              )}
+                              <div className="min-w-0 flex-1 leading-none space-y-0.5">
+                                <span className="font-mono font-black text-[9px] block truncate text-slate-900">
+                                  {bien.etiqueta_interna}
+                                </span>
+                                <span className="text-[6.5px] font-mono text-slate-600 block truncate">
+                                  {bien.codigo_patrimonial || 'S/C'}
+                                </span>
+                                <span className="text-[6px] text-slate-500 block truncate">
+                                  {bien.denominacion}
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="flex justify-between items-center text-[6px] text-slate-400 border-t border-slate-100 pt-0.5 leading-none">
+                              <span>{amb?.nombre || 'AIP'}</span>
+                              <span>{mostrarGuiasCorte ? '✂ CORTE' : 'MAMM'}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* ========================================================================= */}
+        {/* 2. CONTENEDOR EXCLUSIVO DE IMPRESIÓN (SOLO IMPRESIÓN / PDF)               */}
+        {/* Mantiene EXACTAMENTE la configuración milimétrica 4/5 cols aprobada       */}
+        {/* ========================================================================= */}
+        <div
+          className={`print-only-container print-label-grid ${
+            columnasImpresion === 5
+              ? 'print-grid-cols-5'
+              : columnasImpresion === 3
+              ? 'print-grid-cols-3'
+              : 'print-grid-cols-4'
+          }`}
+        >
             {bienesParaImprimir.map((bien) => {
               const qrUrl = qrDataUrls[bien.id];
               const amb = ambientes.find((a) => a.id === bien.ambiente_id);
@@ -1027,8 +1351,7 @@ export const GeneradorEtiquetasQR: React.FC<GeneradorEtiquetasQRProps> = ({
               );
             })}
           </div>
-        )}
-      </div>
+        </div>
       {/* Modal para asignar lote a seleccionados */}
       {modalAsignarLoteOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in no-print">
