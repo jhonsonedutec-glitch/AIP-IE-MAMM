@@ -106,6 +106,10 @@ export const GeneradorEtiquetasQR: React.FC<GeneradorEtiquetasQRProps> = ({
         if (!coincide) return false;
       }
       return true;
+    }).sort((a, b) => {
+      const etqA = a.etiqueta_interna || a.codigo_patrimonial || '';
+      const etqB = b.etiqueta_interna || b.codigo_patrimonial || '';
+      return etqA.localeCompare(etqB, undefined, { numeric: true, sensitivity: 'base' });
     });
   }, [bienes, ambientes, tipoStockFiltro, ambienteFiltro, categoriaFiltro, loteFiltro, busqueda]);
 
@@ -132,9 +136,15 @@ export const GeneradorEtiquetasQR: React.FC<GeneradorEtiquetasQRProps> = ({
     setSeleccionados(new Set());
   };
 
-  // Bienes elegidos para imprimir
+  // Bienes elegidos para imprimir (con ordenamiento natural)
   const bienesParaImprimir = useMemo(() => {
-    return bienes.filter((b) => seleccionados.has(b.id));
+    return bienes
+      .filter((b) => seleccionados.has(b.id))
+      .sort((a, b) => {
+        const etqA = a.etiqueta_interna || a.codigo_patrimonial || '';
+        const etqB = b.etiqueta_interna || b.codigo_patrimonial || '';
+        return etqA.localeCompare(etqB, undefined, { numeric: true, sensitivity: 'base' });
+      });
   }, [bienes, seleccionados]);
 
   // Generar QRs con qrcode.toDataURL para los seleccionados
@@ -458,7 +468,7 @@ export const GeneradorEtiquetasQR: React.FC<GeneradorEtiquetasQRProps> = ({
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 max-h-56 overflow-y-auto p-1">
-            {bienesFiltrados.map((bien) => {
+            {bienesFiltrados.map((bien, idx) => {
               const isSelected = seleccionados.has(bien.id);
               const amb = ambientes.find((a) => a.id === bien.ambiente_id);
               const esAIP = esAmbientePrestable(amb);
@@ -493,6 +503,9 @@ export const GeneradorEtiquetasQR: React.FC<GeneradorEtiquetasQRProps> = ({
                   />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center space-x-1.5">
+                      <span className="font-mono text-slate-400 text-[11px] font-semibold">
+                        {String(idx + 1).padStart(2, '0')}.
+                      </span>
                       <span className="font-mono font-bold text-slate-900">
                         {bien.etiqueta_interna}
                       </span>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   ArrowLeftRight,
   Layers,
@@ -90,25 +90,33 @@ export const DistribucionModule: React.FC = () => {
     cargarDatos();
   }, []);
 
-  // Bienes filtrados por ambiente y búsqueda
-  const bienesVisibles = bienes.filter((b) => {
-    if (b.estado_operativo === 'DE_BAJA') return false;
+  // Bienes filtrados por ambiente y búsqueda con orden natural por etiqueta
+  const bienesVisibles = useMemo(() => {
+    const list = bienes.filter((b) => {
+      if (b.estado_operativo === 'DE_BAJA') return false;
 
-    if (ambienteSeleccionadoId !== 'TODOS' && b.ambiente_id !== ambienteSeleccionadoId) {
-      return false;
-    }
+      if (ambienteSeleccionadoId !== 'TODOS' && b.ambiente_id !== ambienteSeleccionadoId) {
+        return false;
+      }
 
-    if (!busquedaBienes.trim()) return true;
-    const term = busquedaBienes.toLowerCase().trim();
-    return (
-      b.denominacion.toLowerCase().includes(term) ||
-      b.codigo_patrimonial.toLowerCase().includes(term) ||
-      (b.etiqueta_interna && b.etiqueta_interna.toLowerCase().includes(term)) ||
-      b.serie.toLowerCase().includes(term) ||
-      b.marca.toLowerCase().includes(term) ||
-      b.modelo.toLowerCase().includes(term)
-    );
-  });
+      if (!busquedaBienes.trim()) return true;
+      const term = busquedaBienes.toLowerCase().trim();
+      return (
+        b.denominacion.toLowerCase().includes(term) ||
+        b.codigo_patrimonial.toLowerCase().includes(term) ||
+        (b.etiqueta_interna && b.etiqueta_interna.toLowerCase().includes(term)) ||
+        b.serie.toLowerCase().includes(term) ||
+        b.marca.toLowerCase().includes(term) ||
+        b.modelo.toLowerCase().includes(term)
+      );
+    });
+
+    return list.sort((a, b) => {
+      const etqA = a.etiqueta_interna || a.codigo_patrimonial || '';
+      const etqB = b.etiqueta_interna || b.codigo_patrimonial || '';
+      return etqA.localeCompare(etqB, undefined, { numeric: true, sensitivity: 'base' });
+    });
+  }, [bienes, ambienteSeleccionadoId, busquedaBienes]);
 
   // Movimientos filtrados
   const movimientosVisibles = movimientos.filter((m) => {
@@ -478,6 +486,7 @@ export const DistribucionModule: React.FC = () => {
                         />
                       </th>
                     )}
+                    <th className="p-3 w-12 text-center font-bold">N°</th>
                     <th className="p-3">Etiqueta QR</th>
                     <th className="p-3">Cód. Patrimonial</th>
                     <th className="p-3">Denominación</th>
@@ -492,18 +501,18 @@ export const DistribucionModule: React.FC = () => {
                 <tbody className="divide-y divide-slate-100">
                   {loading ? (
                     <tr>
-                      <td colSpan={10} className="p-8 text-center text-slate-400">
+                      <td colSpan={11} className="p-8 text-center text-slate-400">
                         Cargando distribución de bienes...
                       </td>
                     </tr>
                   ) : bienesVisibles.length === 0 ? (
                     <tr>
-                      <td colSpan={10} className="p-8 text-center text-slate-400">
+                      <td colSpan={11} className="p-8 text-center text-slate-400">
                         No hay equipos para mostrar en este ambiente.
                       </td>
                     </tr>
                   ) : (
-                    bienesVisibles.map((b) => {
+                    bienesVisibles.map((b, idx) => {
                       const amb = ambientes.find((a) => a.id === b.ambiente_id);
                       const ambNombre =
                         amb?.nombre.trim().toLowerCase() === 'otros' && b.ubicacion_detalle
@@ -535,6 +544,9 @@ export const DistribucionModule: React.FC = () => {
                               />
                             </td>
                           )}
+                          <td className="p-3 text-center font-mono text-slate-400 font-medium">
+                            {String(idx + 1).padStart(2, '0')}
+                          </td>
                           <td className="p-3 font-mono font-bold text-emerald-700">
                             {b.etiqueta_interna || '—'}
                           </td>

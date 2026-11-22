@@ -484,6 +484,10 @@ export const CatalogosPedagogicosTab: React.FC<CatalogosPedagogicosTabProps> = (
         (bien.lote_etiqueta && bien.lote_etiqueta.toLowerCase().includes(q)) ||
         (bien.codigo_patrimonial && bien.codigo_patrimonial.toLowerCase().includes(q))
       );
+    }).sort((a, b) => {
+      const etqA = a.etiqueta_interna || a.codigo_patrimonial || '';
+      const etqB = b.etiqueta_interna || b.codigo_patrimonial || '';
+      return etqA.localeCompare(etqB, undefined, { numeric: true, sensitivity: 'base' });
     });
   }, [bienes, ambientes, bloques, bloqueEditando, filtroAmbienteBloque, filtroLoteBloque, busquedaBienBloque]);
 
@@ -828,12 +832,18 @@ export const CatalogosPedagogicosTab: React.FC<CatalogosPedagogicosTabProps> = (
                   .map((bid) => bienes.find((x) => x.id === bid))
                   .filter((bien): bien is BienPatrimonial => !!bien);
 
-                // 1. Equipos en ambientes prestables (AIP) y no dados de baja
-                const equiposAIP = bienesDelBloque.filter((bien) => {
-                  if (bien.activo === false || bien.estado_operativo === 'DE_BAJA') return false;
-                  const amb = ambientes.find((a) => a.id === bien.ambiente_id);
-                  return esAmbientePrestable(amb);
-                });
+                // 1. Equipos en ambientes prestables (AIP) y no dados de baja (con orden natural)
+                const equiposAIP = bienesDelBloque
+                  .filter((bien) => {
+                    if (bien.activo === false || bien.estado_operativo === 'DE_BAJA') return false;
+                    const amb = ambientes.find((a) => a.id === bien.ambiente_id);
+                    return esAmbientePrestable(amb);
+                  })
+                  .sort((a, b) => {
+                    const etqA = a.etiqueta_interna || a.codigo_patrimonial || '';
+                    const etqB = b.etiqueta_interna || b.codigo_patrimonial || '';
+                    return etqA.localeCompare(etqB, undefined, { numeric: true, sensitivity: 'base' });
+                  });
 
                 // Clasificación operativa en tiempo real dentro del AIP
                 const disponiblesAhora = equiposAIP.filter((x) => x.estado_operativo === 'OPERATIVO');
@@ -842,12 +852,18 @@ export const CatalogosPedagogicosTab: React.FC<CatalogosPedagogicosTabProps> = (
                   (x) => x.estado_operativo === 'EN_MANTENIMIENTO'
                 );
 
-                // 2. Equipos en oficinas no prestables (TOE, Dirección, etc.) o dados de baja
-                const equiposDistribuidos = bienesDelBloque.filter((bien) => {
-                  if (bien.activo === false || bien.estado_operativo === 'DE_BAJA') return true;
-                  const amb = ambientes.find((a) => a.id === bien.ambiente_id);
-                  return !esAmbientePrestable(amb);
-                });
+                // 2. Equipos en oficinas no prestables (TOE, Dirección, etc.) o dados de baja (con orden natural)
+                const equiposDistribuidos = bienesDelBloque
+                  .filter((bien) => {
+                    if (bien.activo === false || bien.estado_operativo === 'DE_BAJA') return true;
+                    const amb = ambientes.find((a) => a.id === bien.ambiente_id);
+                    return !esAmbientePrestable(amb);
+                  })
+                  .sort((a, b) => {
+                    const etqA = a.etiqueta_interna || a.codigo_patrimonial || '';
+                    const etqB = b.etiqueta_interna || b.codigo_patrimonial || '';
+                    return etqA.localeCompare(etqB, undefined, { numeric: true, sensitivity: 'base' });
+                  });
 
                 return (
                   <div
@@ -897,7 +913,7 @@ export const CatalogosPedagogicosTab: React.FC<CatalogosPedagogicosTabProps> = (
                           </p>
                         ) : (
                           <>
-                            {equiposAIP.slice(0, 6).map((bien) => {
+                            {equiposAIP.slice(0, 6).map((bien, idx) => {
                               const prestamoActivo =
                                 bien.estado_operativo === 'PRESTADO'
                                   ? prestamosActivos?.find(
@@ -911,6 +927,9 @@ export const CatalogosPedagogicosTab: React.FC<CatalogosPedagogicosTabProps> = (
                                   className="flex items-center justify-between text-[11px] text-slate-700 py-0.5"
                                 >
                                   <div className="flex items-center space-x-1.5 min-w-0">
+                                    <span className="font-mono text-slate-400 text-[11px] font-semibold flex-shrink-0">
+                                      {String(idx + 1).padStart(2, '0')}.
+                                    </span>
                                     <span className="font-mono font-bold text-slate-900 flex-shrink-0">
                                       {bien.etiqueta_interna || bien.id.slice(0, 6)}
                                     </span>
@@ -963,7 +982,7 @@ export const CatalogosPedagogicosTab: React.FC<CatalogosPedagogicosTabProps> = (
                             <span>Distribuidos fuera del AIP (excluidos de préstamo):</span>
                           </div>
                           <div className="space-y-1.5 max-h-32 overflow-y-auto">
-                            {equiposDistribuidos.map((bf) => {
+                            {equiposDistribuidos.map((bf, idx) => {
                               const ambNombre =
                                 ambientes.find((a) => a.id === bf.ambiente_id)?.nombre ||
                                 (bf.estado_operativo === 'DE_BAJA' ? 'De Baja' : 'Oficina Externa');
@@ -973,6 +992,9 @@ export const CatalogosPedagogicosTab: React.FC<CatalogosPedagogicosTabProps> = (
                                   className="px-2 py-1 bg-white border border-amber-200 rounded-lg text-[11px] flex items-center justify-between gap-2"
                                 >
                                   <div className="flex items-center space-x-1.5 min-w-0">
+                                    <span className="font-mono text-amber-700/70 text-[11px] font-semibold flex-shrink-0">
+                                      {String(idx + 1).padStart(2, '0')}.
+                                    </span>
                                     <span className="font-mono font-bold text-slate-900 flex-shrink-0">
                                       {bf.etiqueta_interna}
                                     </span>
@@ -1356,7 +1378,7 @@ export const CatalogosPedagogicosTab: React.FC<CatalogosPedagogicosTabProps> = (
                       No se encontraron equipos disponibles en AIP con los filtros aplicados.
                     </p>
                   ) : (
-                    bienesParaBloqueFiltrados.map((bien) => {
+                    bienesParaBloqueFiltrados.map((bien, idx) => {
                       const incluido = formBloque.bienes_ids.includes(bien.id);
                       const ambEquipo = ambientes.find((a) => a.id === bien.ambiente_id);
                       return (
@@ -1376,6 +1398,9 @@ export const CatalogosPedagogicosTab: React.FC<CatalogosPedagogicosTabProps> = (
                               onChange={() => {}}
                               className="w-3.5 h-3.5 text-indigo-600 rounded cursor-pointer shrink-0"
                             />
+                            <span className="font-mono text-slate-400 text-[11px] font-semibold shrink-0">
+                              {String(idx + 1).padStart(2, '0')}.
+                            </span>
                             {bien.lote_etiqueta && (
                               <span
                                 className="w-2.5 h-2.5 rounded-full inline-block shrink-0 shadow-xs border border-white"

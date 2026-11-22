@@ -8,6 +8,7 @@ import {
   EstadoOperativo,
   COLORES_LOTE_PREDEFINIDOS,
   deducirColorLote,
+  detectarLoteAutomatico,
 } from '@/types';
 import { bienRepository } from '@/repositories';
 import { useAuth } from '@/hooks';
@@ -203,6 +204,18 @@ export const BienFormModal: React.FC<BienFormModalProps> = ({
     } else if (nuevoLote) {
       const pred = COLORES_LOTE_PREDEFINIDOS.find((item) => item.nombre === nuevoLote);
       if (pred) setLoteColor(pred.color);
+    }
+  };
+
+  const handleObservacionChange = (texto: string) => {
+    setObservacion(texto);
+    // Si el lote aún está en "Sin lote", auto-etiquetar si escribe VERDE u otro color
+    if (!loteSelect) {
+      const { lote_etiqueta, lote_color } = detectarLoteAutomatico(texto);
+      if (lote_etiqueta) {
+        setLoteSelect(lote_etiqueta);
+        setLoteColor(lote_color);
+      }
     }
   };
 
@@ -900,7 +913,7 @@ export const BienFormModal: React.FC<BienFormModalProps> = ({
             <textarea
               rows={2}
               value={observacion}
-              onChange={(e) => setObservacion(e.target.value)}
+              onChange={(e) => handleObservacionChange(e.target.value)}
               placeholder="Notas técnicas, accesorios incluidos, estado del cargador, etc."
               className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none"
             />

@@ -15,6 +15,7 @@ import {
   Tag,
   Palette,
   X,
+  Sparkles,
 } from 'lucide-react';
 import {
   BienPatrimonial,
@@ -72,6 +73,7 @@ export const InventarioModule: React.FC = () => {
   const [loteRapidoNombreOtro, setLoteRapidoNombreOtro] = useState<string>('');
   const [loteRapidoColor, setLoteRapidoColor] = useState<string>('#EA580C');
   const [guardandoLoteRapido, setGuardandoLoteRapido] = useState(false);
+  const [regularizandoVerde, setRegularizandoVerde] = useState(false);
 
   useEffect(() => {
     cargarDatos();
@@ -120,9 +122,9 @@ export const InventarioModule: React.FC = () => {
     return Array.from(set).sort();
   }, [bienes]);
 
-  // Filtrado reactivo en cliente
+  // Filtrado reactivo en cliente con ordenamiento natural por etiqueta
   const bienesFiltrados = useMemo(() => {
-    return bienes.filter((b) => {
+    const filtrados = bienes.filter((b) => {
       // 1. Búsqueda por texto (código patrimonial, etiqueta, serie, marca, modelo, denominación)
       if (busqueda.trim()) {
         const q = busqueda.toLowerCase().trim();
@@ -153,7 +155,45 @@ export const InventarioModule: React.FC = () => {
 
       return true;
     });
+
+    // Orden natural por defecto: LAP-001, LAP-002, ..., LAP-080
+    return filtrados.sort((a, b) => {
+      const etqA = a.etiqueta_interna || a.codigo_patrimonial || '';
+      const etqB = b.etiqueta_interna || b.codigo_patrimonial || '';
+      return etqA.localeCompare(etqB, undefined, { numeric: true, sensitivity: 'base' });
+    });
   }, [bienes, busqueda, filtroAmbiente, filtroCategoria, filtroConservacion, filtroOperativo, filtroLote]);
+
+  // Detección de equipos con observación "VERDE" o "YERDE" sin lote asignado para regularización
+  const bienesParaRegularizarVerde = useMemo(() => {
+    if (!esAdmin) return [];
+    return bienes.filter((b) => {
+      if (b.estado_operativo === 'DE_BAJA') return false;
+      if (b.lote_etiqueta && b.lote_etiqueta.trim()) return false;
+      const obs = (b.observacion || '').toUpperCase();
+      return obs.includes('VERDE') || obs.includes('YERDE');
+    });
+  }, [bienes, esAdmin]);
+
+  const handleRegularizarVerde = async () => {
+    if (bienesParaRegularizarVerde.length === 0) return;
+    setRegularizandoVerde(true);
+    try {
+      const ids = bienesParaRegularizarVerde.map((b) => b.id);
+      const operador = user ? { uid: user.uid, email: user.email || '' } : undefined;
+      await bienRepository.asignarLoteMasivo(ids, 'LOTE VERDE', '#16A34A', operador);
+      await cargarDatos();
+      setFeedback({
+        tipo: 'ok',
+        msg: `Se auto-etiquetaron exitosamente ${ids.length} equipos como LOTE VERDE.`,
+      });
+    } catch (err: any) {
+      console.error('Error al regularizar lote verde:', err);
+      setFeedback({ tipo: 'err', msg: 'Error al auto-etiquetar equipos con LOTE VERDE.' });
+    } finally {
+      setRegularizandoVerde(false);
+    }
+  };
 
   // Datos paginados
   const totalPaginas = Math.ceil(bienesFiltrados.length / ITEMS_POR_PAGINA) || 1;
@@ -480,6 +520,33 @@ export const InventarioModule: React.FC = () => {
         </div>
       </div>
 
+      {/* Banner de Regularización LOTE VERDE */}
+      {bienesParaRegularizarVerde.length > 0 && esAdmin && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 bg-emerald-50 border border-emerald-300 rounded-xl text-emerald-950 text-xs shadow-xs">
+          <div className="flex items-center space-x-2">
+            <Sparkles className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>
+              Se detectaron <strong>{bienesParaRegularizarVerde.length} equipos</strong> con la palabra &quot;VERDE&quot; en observaciones sin lote asignado.
+            </span>
+          </div>
+          <button
+            type="button"
+            disabled={regularizandoVerde}
+            onClick={handleRegularizarVerde}
+            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold rounded-lg shadow-xs transition-colors shrink-0 flex items-center space-x-1.5"
+          >
+            {regularizandoVerde ? (
+              <>
+                <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin inline-block" />
+                <span>Etiquetando...</span>
+              </>
+            ) : (
+              <span>Auto-etiquetar {bienesParaRegularizarVerde.length} equipos con &quot;LOTE VERDE&quot;</span>
+            )}
+          </button>
+        </div>
+      )}
+
       {/* Tabla de Inventario */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
         {loading ? (
@@ -500,6 +567,7 @@ export const InventarioModule: React.FC = () => {
             <table className="w-full text-left border-collapse text-xs">
               <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold uppercase tracking-wider text-[11px]">
                 <tr>
+                  <th className="py-3 px-3 w-12 text-center font-bold">N°</th>
                   <th className="py-3 px-3">Etiqueta / QR</th>
                   <th className="py-3 px-3">Cód. Patrimonial</th>
                   <th className="py-3 px-3">Denominación</th>
@@ -512,13 +580,16 @@ export const InventarioModule: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {bienesPaginados.map((b) => (
+                {bienesPaginados.map((b, index) => (
                   <tr
                     key={b.id}
                     className={`hover:bg-slate-50/70 transition-colors ${
                       b.estado_operativo === 'DE_BAJA' ? 'bg-slate-50/40 text-slate-400 opacity-75' : ''
                     }`}
                   >
+                    <td className="py-3 px-3 text-slate-400 font-mono font-medium text-center">
+                      {String((paginaActual - 1) * ITEMS_POR_PAGINA + index + 1).padStart(2, '0')}
+                    </td>
                     <td className="py-3 px-3">
                       <div className="flex flex-col space-y-1">
                         <span className="font-mono font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 text-[11px] inline-block w-fit">

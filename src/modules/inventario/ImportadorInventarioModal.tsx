@@ -16,7 +16,7 @@ import {
   CategoriaEquipo,
   EstadoConservacion,
   COLORES_LOTE_PREDEFINIDOS,
-  deducirColorLote,
+  detectarLoteAutomatico,
 } from '@/types';
 import { bienRepository } from '@/repositories';
 import { useAuth } from '@/hooks';
@@ -221,20 +221,23 @@ export const ImportadorInventarioModal: React.FC<ImportadorInventarioModalProps>
         if (match) categoria_id = match.id;
       }
 
-      // Resolver Lote y Color
+      // Extraer observaciones primero para detección inteligente de lote
+      const observacion =
+        getVal(['observaciones', 'observacion', 'notas', 'nota']) || '';
+
+      // Resolver Lote y Color con detección automática por texto (ej. "LAPTOP 4 VERDE", "YERDE")
       const loteRaw = getVal(['lote', 'lote / grupo', 'lote grupo', 'grupo lote', 'lotedotacion', 'dotacion']);
       const colorLoteRaw = getVal(['color de lote', 'color lote', 'color del lote', 'colorlote']);
 
-      const lote_etiqueta = (loteRaw || loteDefecto || '').trim().toUpperCase();
-      let lote_color = '';
-      if (lote_etiqueta) {
-        lote_color = colorLoteRaw ? colorLoteRaw.trim() : deducirColorLote(lote_etiqueta);
-      }
+      const { lote_etiqueta, lote_color } = detectarLoteAutomatico(
+        observacion,
+        loteRaw,
+        colorLoteRaw,
+        loteDefecto
+      );
 
       const etiqueta_interna =
         getVal(['etiqueta interna', 'etiqueta', 'codigo interno', 'rotulado']) || '';
-      const observacion =
-        getVal(['observaciones', 'observacion', 'notas', 'nota']) || '';
 
       // Validación de duplicados y campos
       let estadoValidacion: 'VALIDO' | 'DUPLICADO' | 'ERROR' = 'VALIDO';
@@ -521,7 +524,7 @@ export const ImportadorInventarioModal: React.FC<ImportadorInventarioModalProps>
                 <table className="w-full text-left border-collapse text-[11px]">
                   <thead className="bg-slate-100 text-slate-700 font-semibold sticky top-0 shadow-xs">
                     <tr>
-                      <th className="py-2 px-3 w-12">#</th>
+                      <th className="py-2 px-3 w-12 text-center">N°</th>
                       <th className="py-2 px-3">Estado</th>
                       <th className="py-2 px-3">Lote</th>
                       <th className="py-2 px-3">Denominación</th>
@@ -543,7 +546,9 @@ export const ImportadorInventarioModal: React.FC<ImportadorInventarioModalProps>
                             : 'hover:bg-slate-50'
                         }
                       >
-                        <td className="py-1.5 px-3 text-slate-400 font-mono">{f.index}</td>
+                        <td className="py-1.5 px-3 text-slate-400 font-mono font-medium text-center">
+                          {String(f.index).padStart(2, '0')}
+                        </td>
                         <td className="py-1.5 px-3">
                           {f.estadoValidacion === 'VALIDO' && (
                             <span className="text-emerald-700 font-bold bg-emerald-100 px-1.5 py-0.5 rounded">

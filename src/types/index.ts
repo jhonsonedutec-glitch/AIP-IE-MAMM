@@ -119,6 +119,56 @@ export function deducirColorLote(nombreLote?: string): string {
   return '#6366F1';
 }
 
+export function detectarLoteAutomatico(
+  observaciones?: string,
+  loteExplicito?: string,
+  colorExplicito?: string,
+  lotePorDefecto?: string
+): { lote_etiqueta: string; lote_color: string } {
+  // 1. Si existe lote explícito
+  if (loteExplicito && loteExplicito.trim()) {
+    const etq = loteExplicito.trim().toUpperCase();
+    const color = colorExplicito && colorExplicito.trim() ? colorExplicito.trim() : deducirColorLote(etq);
+    return { lote_etiqueta: etq, lote_color: color };
+  }
+
+  // 2. Si no viene lote explícito, analizar el texto de observaciones
+  if (observaciones && observaciones.trim()) {
+    const obsUpper = observaciones.toUpperCase();
+    // Detección de VERDE y variante OCR YERDE (ej. LAPTOP 4 VERDE, LAPTOP 5 YERDE)
+    if (obsUpper.includes('VERDE') || obsUpper.includes('YERDE')) {
+      return { lote_etiqueta: 'LOTE VERDE', lote_color: '#16A34A' };
+    }
+    if (obsUpper.includes('NARANJA')) {
+      return { lote_etiqueta: 'LOTE NARANJA', lote_color: '#EA580C' };
+    }
+    if (obsUpper.includes('AZUL')) {
+      return { lote_etiqueta: 'LOTE AZUL', lote_color: '#2563EB' };
+    }
+    if (obsUpper.includes('AMARILLO')) {
+      return { lote_etiqueta: 'LOTE AMARILLO', lote_color: '#CA8A04' };
+    }
+    if (obsUpper.includes('ROJO')) {
+      return { lote_etiqueta: 'LOTE ROJO', lote_color: '#DC2626' };
+    }
+    if (obsUpper.includes('MORADO') || obsUpper.includes('VIOLETA')) {
+      return { lote_etiqueta: 'LOTE MORADO', lote_color: '#7C3AED' };
+    }
+  }
+
+  // 3. Fallback a lote por defecto si fue especificado
+  if (lotePorDefecto && lotePorDefecto.trim()) {
+    const etq = lotePorDefecto.trim().toUpperCase();
+    return { lote_etiqueta: etq, lote_color: deducirColorLote(etq) };
+  }
+
+  return { lote_etiqueta: '', lote_color: '' };
+}
+
+export function compararEtiquetasNatural(a?: string, b?: string): number {
+  return (a || '').localeCompare(b || '', undefined, { numeric: true, sensitivity: 'base' });
+}
+
 export interface MovimientoBien {
   id: string;
   bien_id: string;
