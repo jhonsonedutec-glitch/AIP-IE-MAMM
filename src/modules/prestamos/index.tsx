@@ -18,6 +18,10 @@ import {
   Trash2,
   AlertCircle,
   Check,
+  Hash,
+  Minus,
+  Plus,
+  ExternalLink,
 } from 'lucide-react';
 import {
   Prestamo,
@@ -87,15 +91,22 @@ export const PrestamosModule: React.FC = () => {
   const [duracionHoras, setDuracionHoras] = useState(2);
   const [carritoBienes, setCarritoBienes] = useState<Bien[]>([]);
 
-  // Entrada rápida por teclado / lector USB
+  // Entrada rápida por teclado / lector USB (Modalidad 2)
   const [codigoRapido, setCodigoRapido] = useState('');
   const [mensajeRapido, setMensajeRapido] = useState<{ tipo: 'ok' | 'error'; texto: string } | null>(
     null
   );
   const inputRapidoRef = useRef<HTMLInputElement>(null);
 
-  // Selector de bloque masivo
+  // Modalidad 3: Selección Rápida por Cantidad
+  const [cantidadCategoriaFiltro, setCantidadCategoriaFiltro] = useState<string>('TODAS');
+  const [cantidadAmbienteFiltro, setCantidadAmbienteFiltro] = useState<string>('TODOS');
+  const [cantidadDeseada, setCantidadDeseada] = useState<number>(1);
+
+  // Modalidad 4: Selector de Bloque Masivo
   const [bloqueSeleccionadoId, setBloqueSeleccionadoId] = useState('');
+  const [bloqueModoCantidad, setBloqueModoCantidad] = useState<'TODOS' | 'PARCIAL'>('TODOS');
+  const [bloqueCantidadParcial, setBloqueCantidadParcial] = useState<number>(1);
 
   // Búsqueda en historial
   const [busquedaHistorial, setBusquedaHistorial] = useState('');
@@ -161,29 +172,120 @@ export const PrestamosModule: React.FC = () => {
     return bienes.filter((b) => b.activo !== false && b.estado_operativo === 'OPERATIVO');
   }, [bienes]);
 
-  // Manejo de Carrito
-  const agregarAlCarrito = (bien: Bien) => {
-    if (carritoBienes.some((b) => b.id === bien.id)) {
-      setMensajeRapido({
-        tipo: 'error',
-        texto: `El equipo ${bien.etiqueta_interna} ya está en la lista de préstamo.`,
-      });
-      return;
-    }
+  // Equipos disponibles para el selector por cantidad (filtrados y ordenados por etiqueta interna)
+  const equiposDisponiblesParaCantidad = useMemo(() => {
+    const idsEnCarrito = new Set(carritoBienes.map((b) => b.id));
+    return bienes
+      .filter((b) => {
+        if (b.activo === false) return false;
+        if (b.estado_operativo !== 'OPERATIVO') return false;
+        if (idsEnCarrito.has(b.id)) return false;
+        if (cantidadCategoriaFiltro !== 'TODAS' && b.categoria_id !== cantidadCategoriaFiltro) {
+          return false;
+        }
+        if (cantidadAmbienteFiltro !== 'TODOS' && b.ambiente_id !== cantidadAmbienteFiltro) {
+          return false;
+        }
+        return true;
+      })
+      .sort((a, b) =>
+        (a.etiqueta_interna || '').localeCompare(b.etiqueta_interna || '', undefined, {
+          numeric: true,
+        })
+      );
+  }, [bienes, carritoBienes, cantidadCategoriaFiltro, cantidadAmbienteFiltro]);
 
+  // Equipos disponibles dentro del bloque seleccionado (no en carrito y operativos)
+  const equiposDisponiblesEnBloque = useMemo(() => {
+    if (!bloqueSeleccionadoId) return [];
+    const bloque = bloques.find((b) => b.id === bloqueSeleccionadoId);
+    if (!bloque) return [];
+    const idsEnCarrito = new Set(carritoBienes.map((c) => c.id));
+    return bienes
+      .filter(
+        (b) =>
+          bloque.bienes_ids.includes(b.id) &&
+          b.estado_operativo === 'OPERATIVO' &&
+          b.activo !== false &&
+          !idsEnCarrito.has(b.id)
+      )
+      .sort((a, b) =>
+        (a.etiqueta_interna || '').localeCompare(b.etiqueta_interna || '', undefined, {
+          numeric: true,
+        })
+      );
+  }, [bloqueSeleccionadoId, bloques, bienes, carritoBienes]);
+
+  // Manejo de Carrito con Bloqueo Estricto de Duplicados (Actualización Funcional)
+  const agregarAlCarrito = (bien: Bien) => {
     if (bien.estado_operativo !== 'OPERATIVO') {
       setMensajeRapido({
         tipo: 'error',
-        texto: `El equipo ${bien.etiqueta_interna} no está operativo (${bien.estado_operativo}).`,
+        texto: `El equipo ${bien.etiqueta_interna || bien.codigo_patrimonial} no está disponible (${bien.estado_operativo}).`,
       });
       return;
     }
 
-    setCarritoBienes((prev) => [...prev, bien]);
-    setMensajeRapido({
-      tipo: 'ok',
-      texto: `+ ${bien.etiqueta_interna} (${bien.denominacion}) agregado al préstamo.`,
+    let yaEstaba = false;
+    setCarritoBienes((prev) => {
+      if (prev.some((b) => b.id === bien.id)) {
+        yaEstaba = true;
+        return prev;
+      }
+      return [...prev, bien];
     });
+
+    if (yaEstaba) {
+      setMensajeRapido({
+        tipo: 'error',
+        texto: `${bien.etiqueta_interna || bien.codigo_patrimonial} ya fue agregado al préstamo.`,
+      });
+    } else {
+      setMensajeRapido({
+        tipo: 'ok',
+        texto: `+ ${bien.etiqueta_interna || bien.codigo_patrimonial} (${bien.denominacion}) agregado al préstamo.`,
+      });
+    }
+  };
+
+  // Agregar lote de equipos sin duplicar
+  const agregarVariosAlCarrito = (nuevos: Bien[], origenNombre?: string) => {
+    let cantidadAgregados = 0;
+    let duplicados = 0;
+
+    setCarritoBienes((prev) => {
+      const idsActuales = new Set(prev.map((b) => b.id));
+      const aAgregar: Bien[] = [];
+
+      for (const bien of nuevos) {
+        if (bien.estado_operativo !== 'OPERATIVO') continue;
+        if (idsActuales.has(bien.id)) {
+          duplicados++;
+          continue;
+        }
+        idsActuales.add(bien.id);
+        aAgregar.push(bien);
+      }
+
+      cantidadAgregados = aAgregar.length;
+      return [...prev, ...aAgregar];
+    });
+
+    if (cantidadAgregados > 0) {
+      const detalleDuplicados =
+        duplicados > 0 ? ` (${duplicados} omitido(s) por ya estar en la lista)` : '';
+      setMensajeRapido({
+        tipo: 'ok',
+        texto: `¡Se agregaron ${cantidadAgregados} equipo(s)${
+          origenNombre ? ` (${origenNombre})` : ''
+        }!${detalleDuplicados}`,
+      });
+    } else if (duplicados > 0) {
+      setMensajeRapido({
+        tipo: 'error',
+        texto: `Los equipos seleccionados ya se encontraban agregados en el préstamo.`,
+      });
+    }
   };
 
   const quitarDelCarrito = (bienId: string) => {
@@ -220,36 +322,50 @@ export const PrestamosModule: React.FC = () => {
     }, 50);
   };
 
-  // Carga masiva por bloque
+  // Modalidad 3: Agregar equipos por cantidad consecutiva
+  const handleAgregarPorCantidad = () => {
+    if (equiposDisponiblesParaCantidad.length === 0) return;
+    const maxDisponibles = equiposDisponiblesParaCantidad.length;
+    const cantidadFinal = Math.min(Math.max(1, cantidadDeseada), maxDisponibles);
+    const seleccionados = equiposDisponiblesParaCantidad.slice(0, cantidadFinal);
+    agregarVariosAlCarrito(seleccionados, `Cantidad: ${cantidadFinal}`);
+    setCantidadDeseada(1);
+  };
+
+  // Modalidad 4: Carga por bloque masivo (todos o parcial)
   const handleCargarBloque = () => {
     if (!bloqueSeleccionadoId) return;
     const bloque = bloques.find((b) => b.id === bloqueSeleccionadoId);
     if (!bloque) return;
 
-    let agregados = 0;
-    let noDisponibles = 0;
+    if (equiposDisponiblesEnBloque.length === 0) {
+      const todosDelBloque = bienes.filter((b) => bloque.bienes_ids.includes(b.id));
+      const enMantenimiento = todosDelBloque.filter((b) => b.estado_operativo !== 'OPERATIVO').length;
+      const yaEnCarrito = todosDelBloque.filter((b) => carritoBienes.some((c) => c.id === b.id)).length;
 
-    bloque.bienes_ids.forEach((bid: string) => {
-      const bien = bienes.find((b) => b.id === bid);
-      if (bien && bien.estado_operativo === 'OPERATIVO' && !carritoBienes.some((c) => c.id === bien.id)) {
-        setCarritoBienes((prev) => [...prev, bien]);
-        agregados++;
-      } else if (bien && bien.estado_operativo !== 'OPERATIVO') {
-        noDisponibles++;
-      }
-    });
+      let causa = '';
+      if (yaEnCarrito > 0) causa = `${yaEnCarrito} equipo(s) ya están en la lista`;
+      if (enMantenimiento > 0) causa += `${causa ? ', ' : ''}${enMantenimiento} en soporte/mantenimiento`;
 
-    if (noDisponibles > 0) {
-      alert(
-        `Se agregaron ${agregados} equipos del bloque "${bloque.nombre}". Atención: ${noDisponibles} equipo(s) del bloque no estaban disponibles (en mantenimiento o prestados).`
-      );
-    } else {
       setMensajeRapido({
-        tipo: 'ok',
-        texto: `¡Se agregaron los ${agregados} equipos del bloque "${bloque.nombre}"!`,
+        tipo: 'error',
+        texto: `No hay equipos disponibles en el bloque "${bloque.nombre}"${
+          causa ? ` (${causa})` : ''
+        }.`,
       });
+      return;
     }
+
+    const maxDisp = equiposDisponiblesEnBloque.length;
+    const cantidadFinal =
+      bloqueModoCantidad === 'TODOS'
+        ? maxDisp
+        : Math.min(Math.max(1, bloqueCantidadParcial), maxDisp);
+
+    const seleccionados = equiposDisponiblesEnBloque.slice(0, cantidadFinal);
+    agregarVariosAlCarrito(seleccionados, `Bloque ${bloque.nombre}`);
     setBloqueSeleccionadoId('');
+    setBloqueCantidadParcial(1);
   };
 
   const toggleAccesorio = (acc: string) => {
@@ -286,8 +402,10 @@ export const PrestamosModule: React.FC = () => {
         docObj?.nombres_apellidos ||
         (docObj ? `${docObj.apellidos || ''}, ${docObj.nombres || ''}` : 'DOCENTE');
 
+      const idsDeduplicados = Array.from(new Set(carritoBienes.map((b) => b.id)));
+
       const prestamoData: Omit<Prestamo, 'id'> = {
-        tipo: carritoBienes.length > 1 ? 'BLOQUE' : 'INDIVIDUAL',
+        tipo: idsDeduplicados.length > 1 ? 'BLOQUE' : 'INDIVIDUAL',
         bloque_id: null,
         docente_id: docenteId,
         docente_nombre: docNombre,
@@ -295,8 +413,8 @@ export const PrestamosModule: React.FC = () => {
         area_nombre: areaObj?.nombre || 'General',
         grado_seccion: `${grado} ${seccion}`,
         ambiente_uso: ambienteUso,
-        bienes_ids: carritoBienes.map((b) => b.id),
-        cantidad_equipos: carritoBienes.length,
+        bienes_ids: idsDeduplicados,
+        cantidad_equipos: idsDeduplicados.length,
         accesorios_entregados: accesoriosSeleccionados.join(', '),
         fecha_salida: fechaSalida.toISOString(),
         fecha_devolucion_estimada: fechaEstimada.toISOString(),
@@ -936,28 +1054,28 @@ export const PrestamosModule: React.FC = () => {
 
             {/* Columna Derecha: Métodos de Entrada + Carrito */}
             <div className="lg:col-span-2 space-y-5">
-              {/* Caja de las 3 Modalidades de Entrada */}
+              {/* Caja de las 4 Modalidades de Entrada */}
               <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
                 <div className="flex items-center justify-between">
                   <h3 className="text-sm font-bold text-slate-800 flex items-center space-x-2">
                     <Laptop className="w-4 h-4 text-indigo-600" />
-                    <span>Agregar Equipos al Préstamo (3 Modalidades)</span>
+                    <span>Agregar Equipos al Préstamo (4 Modalidades)</span>
                   </h3>
                   <span className="text-xs text-slate-500">
                     Disponibles en AIP: <b>{bienesOperativos.length}</b> equipos
                   </span>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* Modalidad 1: Escáner Cámara */}
-                  <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl flex flex-col justify-between space-y-3">
+                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl flex flex-col justify-between space-y-3">
                     <div>
                       <div className="flex items-center space-x-1.5 text-indigo-600 font-bold text-xs mb-1">
                         <Camera className="w-4 h-4" />
                         <span>1. Escáner con Cámara</span>
                       </div>
-                      <p className="text-[11px] text-slate-500">
-                        Usa la cámara web o del móvil para leer el QR del equipo.
+                      <p className="text-[11px] text-slate-500 leading-relaxed">
+                        Usa la cámara web o del móvil para leer instantáneamente el QR de los equipos.
                       </p>
                     </div>
                     <button
@@ -966,19 +1084,19 @@ export const PrestamosModule: React.FC = () => {
                       className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs rounded-lg shadow-sm transition-colors flex items-center justify-center space-x-1.5"
                     >
                       <Camera className="w-4 h-4" />
-                      <span>Abrir Cámara</span>
+                      <span>Abrir Escáner QR</span>
                     </button>
                   </div>
 
                   {/* Modalidad 2: Entrada Rápida / Lector USB */}
-                  <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl flex flex-col justify-between space-y-3">
+                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl flex flex-col justify-between space-y-3">
                     <div>
                       <div className="flex items-center space-x-1.5 text-indigo-600 font-bold text-xs mb-1">
                         <QrCode className="w-4 h-4" />
                         <span>2. Lector USB / Teclado</span>
                       </div>
-                      <p className="text-[11px] text-slate-500">
-                        Digita o escanea con pistola USB y pulsa Enter.
+                      <p className="text-[11px] text-slate-500 leading-relaxed">
+                        Digita el código o escanea con pistola lectora de código de barras y presiona Enter.
                       </p>
                     </div>
                     <div>
@@ -992,48 +1110,264 @@ export const PrestamosModule: React.FC = () => {
                             handleCodigoRapidoSubmit(e);
                           }
                         }}
-                        placeholder="Ej. LAP-001 [Enter]"
-                        className="w-full text-xs px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        placeholder="Ej. LAP-001 o Cód. Pat [Enter]"
+                        className="w-full text-xs px-3 py-2 bg-white border border-slate-300 rounded-lg font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500"
                       />
                     </div>
                   </div>
 
-                  {/* Modalidad 3: Carga por Bloque Masivo */}
-                  <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl flex flex-col justify-between space-y-3">
+                  {/* Modalidad 3: Selección Rápida por Cantidad (NUEVO) */}
+                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl flex flex-col justify-between space-y-3">
                     <div>
-                      <div className="flex items-center space-x-1.5 text-indigo-600 font-bold text-xs mb-1">
-                        <Layers className="w-4 h-4" />
-                        <span>3. Bloque Masivo</span>
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="flex items-center space-x-1.5 text-indigo-600 font-bold text-xs">
+                          <Hash className="w-4 h-4" />
+                          <span>3. Selección por Cantidad</span>
+                        </div>
+                        <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                          Disponibles: {equiposDisponiblesParaCantidad.length}
+                        </span>
                       </div>
-                      <p className="text-[11px] text-slate-500">
-                        Carga sets predefinidos (laptops, robótica) en 1 clic.
+                      <p className="text-[11px] text-slate-500 leading-relaxed">
+                        Agrega N unidades consecutivas disponibles por categoría y ambiente.
                       </p>
                     </div>
-                    <div className="flex space-x-1.5">
-                      <select
-                        value={bloqueSeleccionadoId}
-                        onChange={(e) => setBloqueSeleccionadoId(e.target.value)}
-                        className="w-full text-xs px-2 py-1.5 bg-white border border-slate-300 rounded-lg focus:outline-none text-slate-700"
-                      >
-                        <option value="">Seleccionar bloque...</option>
-                        {bloques
-                          .filter((b) => b.activo !== false)
-                          .map((b) => (
-                            <option key={b.id} value={b.id}>
-                              {b.nombre} ({b.bienes_ids.length})
+
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-2 gap-2">
+                        <select
+                          value={cantidadCategoriaFiltro}
+                          onChange={(e) => {
+                            setCantidadCategoriaFiltro(e.target.value);
+                            setCantidadDeseada(1);
+                          }}
+                          className="text-[11px] px-2 py-1.5 bg-white border border-slate-300 rounded-lg text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                        >
+                          <option value="TODAS">Todas las Categorías</option>
+                          {categorias.map((cat) => (
+                            <option key={cat.id} value={cat.id}>
+                              {cat.nombre}
                             </option>
                           ))}
-                      </select>
-                      <button
-                        type="button"
-                        onClick={handleCargarBloque}
-                        disabled={!bloqueSeleccionadoId}
-                        className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white rounded-lg text-xs font-bold"
-                        title="Cargar equipos del bloque"
-                      >
-                        +
-                      </button>
+                        </select>
+
+                        <select
+                          value={cantidadAmbienteFiltro}
+                          onChange={(e) => {
+                            setCantidadAmbienteFiltro(e.target.value);
+                            setCantidadDeseada(1);
+                          }}
+                          className="text-[11px] px-2 py-1.5 bg-white border border-slate-300 rounded-lg text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                        >
+                          <option value="TODOS">Todos los Ambientes</option>
+                          {ambientes.map((amb) => (
+                            <option key={amb.id} value={amb.id}>
+                              {amb.nombre}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="flex items-center space-x-2">
+                        {/* Contador - / + */}
+                        <div className="flex items-center bg-white border border-slate-300 rounded-lg overflow-hidden flex-shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => setCantidadDeseada((prev) => Math.max(1, prev - 1))}
+                            disabled={cantidadDeseada <= 1 || equiposDisponiblesParaCantidad.length === 0}
+                            className="px-2 py-1.5 text-slate-600 hover:bg-slate-100 disabled:opacity-40 transition-colors"
+                          >
+                            <Minus className="w-3.5 h-3.5" />
+                          </button>
+                          <input
+                            type="number"
+                            min={1}
+                            max={Math.max(1, equiposDisponiblesParaCantidad.length)}
+                            value={cantidadDeseada}
+                            onChange={(e) => {
+                              const val = parseInt(e.target.value, 10);
+                              if (!isNaN(val)) {
+                                setCantidadDeseada(
+                                  Math.min(Math.max(1, val), Math.max(1, equiposDisponiblesParaCantidad.length))
+                                );
+                              }
+                            }}
+                            className="w-12 text-center text-xs font-bold text-slate-800 focus:outline-none py-1"
+                          />
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setCantidadDeseada((prev) =>
+                                Math.min(prev + 1, Math.max(1, equiposDisponiblesParaCantidad.length))
+                              )
+                            }
+                            disabled={
+                              cantidadDeseada >= equiposDisponiblesParaCantidad.length ||
+                              equiposDisponiblesParaCantidad.length === 0
+                            }
+                            className="px-2 py-1.5 text-slate-600 hover:bg-slate-100 disabled:opacity-40 transition-colors"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+
+                        {/* Botón agregar */}
+                        <button
+                          type="button"
+                          onClick={handleAgregarPorCantidad}
+                          disabled={equiposDisponiblesParaCantidad.length === 0}
+                          className="flex-1 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-semibold text-xs rounded-lg shadow-sm transition-colors flex items-center justify-center space-x-1"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>
+                            {equiposDisponiblesParaCantidad.length === 0
+                              ? 'Sin disponibles'
+                              : `Agregar ${Math.min(cantidadDeseada, equiposDisponiblesParaCantidad.length)} unid.`}
+                          </span>
+                        </button>
+                      </div>
                     </div>
+                  </div>
+
+                  {/* Modalidad 4: Bloque Masivo (MEJORADO) */}
+                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl flex flex-col justify-between space-y-3">
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="flex items-center space-x-1.5 text-indigo-600 font-bold text-xs">
+                          <Layers className="w-4 h-4" />
+                          <span>4. Bloque Masivo</span>
+                        </div>
+                        {bloqueSeleccionadoId && (
+                          <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                            Disponibles: {equiposDisponiblesEnBloque.length}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-slate-500 leading-relaxed">
+                        Carga conjuntos predefinidos (kits, carritos móviles) con opción total o parcial.
+                      </p>
+                    </div>
+
+                    {bloques.filter((b) => b.activo !== false).length === 0 ? (
+                      <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-[11px] text-amber-800 flex items-center justify-between">
+                        <span>No hay bloques creados aún.</span>
+                        <button
+                          type="button"
+                          onClick={() => setTabActiva('CATALOGOS')}
+                          className="font-bold text-indigo-700 hover:underline flex items-center space-x-1"
+                        >
+                          <span>Crear Bloque</span>
+                          <ExternalLink className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <select
+                          value={bloqueSeleccionadoId}
+                          onChange={(e) => {
+                            setBloqueSeleccionadoId(e.target.value);
+                            setBloqueCantidadParcial(1);
+                          }}
+                          className="w-full text-[11px] px-2 py-1.5 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 text-slate-700"
+                        >
+                          <option value="">-- Seleccionar bloque de equipos --</option>
+                          {bloques
+                            .filter((b) => b.activo !== false)
+                            .map((b) => (
+                              <option key={b.id} value={b.id}>
+                                {b.nombre} ({b.bienes_ids.length} equipos)
+                              </option>
+                            ))}
+                        </select>
+
+                        {bloqueSeleccionadoId && (
+                          <div className="flex items-center space-x-2 pt-1 animate-fade-in">
+                            {/* Opciones Todos / Parcial */}
+                            <div className="flex items-center space-x-1 bg-white border border-slate-300 rounded-lg p-0.5 text-[10px] font-semibold text-slate-600 flex-shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => setBloqueModoCantidad('TODOS')}
+                                className={`px-2 py-1 rounded transition-colors ${
+                                  bloqueModoCantidad === 'TODOS'
+                                    ? 'bg-indigo-600 text-white shadow-xs'
+                                    : 'hover:text-slate-900'
+                                }`}
+                              >
+                                Todos ({equiposDisponiblesEnBloque.length})
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setBloqueModoCantidad('PARCIAL')}
+                                className={`px-2 py-1 rounded transition-colors ${
+                                  bloqueModoCantidad === 'PARCIAL'
+                                    ? 'bg-indigo-600 text-white shadow-xs'
+                                    : 'hover:text-slate-900'
+                                }`}
+                              >
+                                Parcial
+                              </button>
+                            </div>
+
+                            {bloqueModoCantidad === 'PARCIAL' && (
+                              <div className="flex items-center bg-white border border-slate-300 rounded-lg overflow-hidden flex-shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => setBloqueCantidadParcial((prev) => Math.max(1, prev - 1))}
+                                  disabled={bloqueCantidadParcial <= 1}
+                                  className="px-1.5 py-1 text-slate-600 hover:bg-slate-100 disabled:opacity-40"
+                                >
+                                  <Minus className="w-3 h-3" />
+                                </button>
+                                <input
+                                  type="number"
+                                  min={1}
+                                  max={Math.max(1, equiposDisponiblesEnBloque.length)}
+                                  value={bloqueCantidadParcial}
+                                  onChange={(e) => {
+                                    const v = parseInt(e.target.value, 10);
+                                    if (!isNaN(v)) {
+                                      setBloqueCantidadParcial(
+                                        Math.min(Math.max(1, v), Math.max(1, equiposDisponiblesEnBloque.length))
+                                      );
+                                    }
+                                  }}
+                                  className="w-9 text-center text-xs font-bold text-slate-800 focus:outline-none"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setBloqueCantidadParcial((prev) =>
+                                      Math.min(prev + 1, Math.max(1, equiposDisponiblesEnBloque.length))
+                                    )
+                                  }
+                                  disabled={bloqueCantidadParcial >= equiposDisponiblesEnBloque.length}
+                                  className="px-1.5 py-1 text-slate-600 hover:bg-slate-100 disabled:opacity-40"
+                                >
+                                  <Plus className="w-3 h-3" />
+                                </button>
+                              </div>
+                            )}
+
+                            <button
+                              type="button"
+                              onClick={handleCargarBloque}
+                              disabled={equiposDisponiblesEnBloque.length === 0}
+                              className="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-semibold text-xs rounded-lg shadow-sm transition-colors flex items-center justify-center space-x-1"
+                            >
+                              <span>
+                                {equiposDisponiblesEnBloque.length === 0
+                                  ? 'Sin disponibles'
+                                  : `Cargar ${
+                                      bloqueModoCantidad === 'TODOS'
+                                        ? equiposDisponiblesEnBloque.length
+                                        : bloqueCantidadParcial
+                                    } unid.`}
+                              </span>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
 

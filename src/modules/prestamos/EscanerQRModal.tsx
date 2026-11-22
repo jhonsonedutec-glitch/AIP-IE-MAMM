@@ -40,6 +40,8 @@ export const EscanerQRModal: React.FC<EscanerQRModalProps> = ({
   const isStartingRef = useRef<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
+  // Control de enfriamiento para evitar lecturas consecutivas del mismo QR
+  const ultimoEscaneoRef = useRef<{ codigo: string; timestamp: number }>({ codigo: '', timestamp: 0 });
 
   // Reproducir sonido sutil de confirmación
   const reproducirBeep = () => {
@@ -309,6 +311,16 @@ export const EscanerQRModal: React.FC<EscanerQRModalProps> = ({
   const handleCodigoEscaneado = (textoQR: string) => {
     const codigoLimpio = textoQR.trim().toUpperCase();
     if (!codigoLimpio) return;
+
+    // Control de enfriamiento: ignorar lecturas repetidas del mismo código QR durante al menos 2000 ms
+    const ahora = Date.now();
+    if (
+      ultimoEscaneoRef.current.codigo === codigoLimpio &&
+      ahora - ultimoEscaneoRef.current.timestamp < 2000
+    ) {
+      return;
+    }
+    ultimoEscaneoRef.current = { codigo: codigoLimpio, timestamp: ahora };
 
     const bienEncontrado = bienesDisponibles.find(
       (b) =>

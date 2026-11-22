@@ -69,7 +69,10 @@ export class FirestorePrestamoRepository implements IPrestamoRepository {
     datos: Omit<Prestamo, 'id'>,
     usuarioOperador?: OperadorInfo
   ): Promise<string> {
-    if (!datos.bienes_ids || datos.bienes_ids.length === 0) {
+    // Deduplicación estricta de IDs de equipos para garantizar consistencia y evitar colisiones en writeBatch
+    const bienesIdsUnicos = Array.from(new Set(datos.bienes_ids || []));
+
+    if (bienesIdsUnicos.length === 0) {
       throw new Error('Debe incluir al menos un equipo en la solicitud de préstamo.');
     }
     if (!datos.docente_id || !datos.docente_nombre) {
@@ -84,12 +87,12 @@ export class FirestorePrestamoRepository implements IPrestamoRepository {
 
     // 1. Verificar el estado de cada bien en tiempo real
     const bienesConsultados = await Promise.all(
-      datos.bienes_ids.map((id) => bienRepository.obtenerPorId(id))
+      bienesIdsUnicos.map((id) => bienRepository.obtenerPorId(id))
     );
 
     const noDisponibles: string[] = [];
     bienesConsultados.forEach((b, idx) => {
-      const reqId = datos.bienes_ids[idx];
+      const reqId = bienesIdsUnicos[idx];
       if (!b) {
         noDisponibles.push(`ID ${reqId} (No existe)`);
       } else if (b.estado_operativo !== 'OPERATIVO') {
@@ -112,7 +115,7 @@ export class FirestorePrestamoRepository implements IPrestamoRepository {
     const prestamoDocRef = doc(this.colRef);
 
     const prestamoData = limpiarUndefined({
-      tipo: datos.tipo || 'INDIVIDUAL',
+      tipo: datos.tipo || (bienesIdsUnicos.length > 1 ? 'BLOQUE' : 'INDIVIDUAL'),
       bloque_id: datos.bloque_id || null,
       docente_id: datos.docente_id,
       docente_nombre: datos.docente_nombre.trim(),
@@ -120,8 +123,8 @@ export class FirestorePrestamoRepository implements IPrestamoRepository {
       area_nombre: datos.area_nombre.trim(),
       grado_seccion: datos.grado_seccion.trim(),
       ambiente_uso: datos.ambiente_uso.trim() || 'Aula de Clases',
-      bienes_ids: datos.bienes_ids,
-      cantidad_equipos: datos.bienes_ids.length,
+      bienes_ids: bienesIdsUnicos,
+      cantidad_equipos: bienesIdsUnicos.length,
       accesorios_entregados: datos.accesorios_entregados?.trim() || '',
       fecha_salida: datos.fecha_salida ? new Date(datos.fecha_salida) : serverTimestamp(),
       fecha_devolucion_estimada: datos.fecha_devolucion_estimada
@@ -140,7 +143,7 @@ export class FirestorePrestamoRepository implements IPrestamoRepository {
     batch.set(prestamoDocRef, prestamoData);
 
     // 3. Actualizar estado operativo de cada bien a PRESTADO e incrementar total_prestamos
-    datos.bienes_ids.forEach((bienId) => {
+    bienesIdsUnicos.forEach((bienId) => {
       const bienDocRef = doc(this.bienesColRef, bienId);
       batch.update(bienDocRef, {
         estado_operativo: 'PRESTADO',
@@ -207,9 +210,13 @@ export class FirestorePrestamoRepository implements IPrestamoRepository {
       actualizado_en: serverTimestamp(),
     });
 
-    // 2. Actualizar el estado operativo y de conservación de cada equipo
+    // 2. Actualizar el estado operativo y de conservación de cada equipo deduplicando IDs
     if (cierre.equiposRetorno && cierre.equiposRetorno.length > 0) {
+      const vistos = new Set<string>();
       cierre.equiposRetorno.forEach((eq) => {
+        if (!eq.bien_id || vistos.has(eq.bien_id)) return;
+        vistos.add(eq.bien_id);
+
         const bienDocRef = doc(this.bienesColRef, eq.bien_id);
         const updates: Record<string, any> = {
           estado_operativo: eq.estadoOperativo || 'OPERATIVO',
@@ -221,8 +228,9 @@ export class FirestorePrestamoRepository implements IPrestamoRepository {
         batch.update(bienDocRef, updates);
       });
     } else {
-      // Si no se especifica individualmente, todos retornan OPERATIVOS
-      prestamoData.bienes_ids.forEach((bienId) => {
+      // Si no se especifica individualmente, todos retornan OPERATIVOS sin duplicados
+      const idsUnicos = Array.from(new Set(prestamoData.bienes_ids || []));
+      idsUnicos.forEach((bienId) => {
         const bienDocRef = doc(this.bienesColRef, bienId);
         batch.update(bienDocRef, {
           estado_operativo: 'OPERATIVO',
