@@ -11,6 +11,8 @@ import {
   AlertCircle,
   Search,
   X,
+  Laptop,
+  Building2,
 } from 'lucide-react';
 import {
   Docente,
@@ -345,6 +347,63 @@ export const CatalogosPedagogicosTab: React.FC<CatalogosPedagogicosTabProps> = (
     }
   };
 
+  // Quitar un equipo individual del bloque (para bienes trasladados fuera del AIP)
+  const handleQuitarEquipoDeBloque = async (bloque: BloqueEquipos, bienId: string) => {
+    const bien = bienes.find((x) => x.id === bienId);
+    const etiqueta = bien?.etiqueta_interna || 'el equipo seleccionado';
+    if (!window.confirm(`¿Deseas desvincular ${etiqueta} del bloque "${bloque.nombre}"?`)) {
+      return;
+    }
+
+    try {
+      setGuardando(true);
+      const nuevosIds = bloque.bienes_ids.filter((id) => id !== bienId);
+      await bloqueRepository.actualizar(
+        bloque.id,
+        { bienes_ids: nuevosIds },
+        operadorInfo
+      );
+      await onRecargar();
+    } catch (err: any) {
+      alert(err.message || 'Error al desvincular equipo del bloque.');
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  // Resumen global de equipos en tiempo real para la pestaña de bloques
+  const metricasBloques = useMemo(() => {
+    const bienesActivos = bienes.filter(
+      (b) => b.activo !== false && b.estado_operativo !== 'DE_BAJA'
+    );
+
+    // Bienes activos en ambiente AIP
+    const enAIP = bienesActivos.filter((b) => {
+      const amb = ambientes.find((a) => a.id === b.ambiente_id);
+      return esAmbientePrestable(amb);
+    });
+
+    // Ids de bienes asignados a cualquier bloque activo
+    const idsEnBloquesActivos = new Set(
+      bloques.filter((bl) => bl.activo !== false).flatMap((bl) => bl.bienes_ids || [])
+    );
+
+    // Asignados a bloques que están actualmente en AIP
+    const asignadosABloques = enAIP.filter((b) => idsEnBloquesActivos.has(b.id));
+
+    // Bienes activos distribuidos en otras oficinas (TOE, Dirección, Psicología, etc.)
+    const distribuidosFuera = bienesActivos.filter((b) => {
+      const amb = ambientes.find((a) => a.id === b.ambiente_id);
+      return !esAmbientePrestable(amb);
+    });
+
+    return {
+      totalEnAIP: enAIP.length,
+      asignadosABloques: asignadosABloques.length,
+      distribuidosFuera: distribuidosFuera.length,
+    };
+  }, [bienes, ambientes, bloques]);
+
   // Ambientes AIP habilitados para filtro
   const ambientesAIP = useMemo(() => {
     return ambientes.filter((a) => esAmbientePrestable(a) && a.activo !== false);
@@ -655,6 +714,54 @@ export const CatalogosPedagogicosTab: React.FC<CatalogosPedagogicosTabProps> = (
             )}
           </div>
 
+          {/* Mini Barra Informativa con Cifras en Tiempo Real */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs flex items-center space-x-3">
+              <div className="p-2.5 bg-indigo-50 text-indigo-600 rounded-lg">
+                <Laptop className="w-5 h-5" />
+              </div>
+              <div>
+                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
+                  Total en AIP (Prestables)
+                </span>
+                <span className="text-lg font-bold text-slate-800">
+                  {metricasBloques.totalEnAIP}{' '}
+                  <span className="text-xs font-normal text-slate-400">equipos</span>
+                </span>
+              </div>
+            </div>
+
+            <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs flex items-center space-x-3">
+              <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-lg">
+                <Layers className="w-5 h-5" />
+              </div>
+              <div>
+                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
+                  Asignados a Bloques
+                </span>
+                <span className="text-lg font-bold text-slate-800">
+                  {metricasBloques.asignadosABloques}{' '}
+                  <span className="text-xs font-normal text-slate-400">equipos</span>
+                </span>
+              </div>
+            </div>
+
+            <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs flex items-center space-x-3">
+              <div className="p-2.5 bg-amber-50 text-amber-600 rounded-lg">
+                <Building2 className="w-5 h-5" />
+              </div>
+              <div>
+                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
+                  Distribuidos en otras oficinas
+                </span>
+                <span className="text-lg font-bold text-amber-800">
+                  {metricasBloques.distribuidosFuera}{' '}
+                  <span className="text-xs font-normal text-amber-600/70">equipos (TOE, Dir...)</span>
+                </span>
+              </div>
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {bloques.length === 0 ? (
               <div className="col-span-full p-12 text-center bg-white rounded-2xl border border-dashed border-slate-300">
@@ -668,85 +775,128 @@ export const CatalogosPedagogicosTab: React.FC<CatalogosPedagogicosTabProps> = (
                 </p>
               </div>
             ) : (
-              bloques.map((b) => (
-                <div
-                  key={b.id}
-                  className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between hover:border-indigo-300 transition-all"
-                >
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
-                        {b.bienes_ids.length} equipos incluidos
-                      </span>
-                      <span
-                        className={`text-[11px] font-bold ${
-                          b.activo ? 'text-emerald-600' : 'text-slate-400'
-                        }`}
-                      >
-                        {b.activo ? 'Activo' : 'Inactivo'}
-                      </span>
-                    </div>
+              bloques.map((b) => {
+                const bienesDelBloque = b.bienes_ids
+                  .map((bid) => bienes.find((x) => x.id === bid))
+                  .filter((bien): bien is BienPatrimonial => !!bien);
 
-                    <h4 className="text-sm font-bold text-slate-900 mb-1">{b.nombre}</h4>
-                    <p className="text-xs text-slate-500 mb-3">{b.descripcion || 'Sin descripción'}</p>
+                // 1. Equipos en ambientes prestables (AIP) y no dados de baja
+                const equiposLibresAIP = bienesDelBloque.filter((bien) => {
+                  if (bien.activo === false || bien.estado_operativo === 'DE_BAJA') return false;
+                  const amb = ambientes.find((a) => a.id === bien.ambiente_id);
+                  return esAmbientePrestable(amb);
+                });
 
-                    {/* Vista previa de los equipos contenidos */}
-                    <div className="space-y-1 bg-slate-50 p-2.5 rounded-xl border border-slate-100 max-h-32 overflow-y-auto">
-                      {b.bienes_ids.slice(0, 5).map((bid) => {
-                        const bien = bienes.find((x) => x.id === bid);
-                        return (
-                          <div
-                            key={bid}
-                            className="flex items-center justify-between text-[11px] text-slate-700"
-                          >
-                            <span className="font-mono font-bold text-slate-900">
-                              {bien?.etiqueta_interna || bid.slice(0, 6)}
+                // 2. Equipos en oficinas no prestables (TOE, Dirección, etc.) o dados de baja
+                const equiposDistribuidos = bienesDelBloque.filter((bien) => {
+                  if (bien.activo === false || bien.estado_operativo === 'DE_BAJA') return true;
+                  const amb = ambientes.find((a) => a.id === bien.ambiente_id);
+                  return !esAmbientePrestable(amb);
+                });
+
+                return (
+                  <div
+                    key={b.id}
+                    className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between hover:border-indigo-300 transition-all"
+                  >
+                    <div>
+                      {/* Cabecera con badges diferenciados */}
+                      <div className="flex items-center justify-between gap-1.5 mb-2 flex-wrap">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                            {equiposLibresAIP.length} libres en AIP
+                          </span>
+                          {equiposDistribuidos.length > 0 && (
+                            <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                              {equiposDistribuidos.length} distribuido{equiposDistribuidos.length > 1 ? 's' : ''}
                             </span>
-                            <span className="text-slate-500 truncate max-w-[120px]">
-                              {bien?.denominacion || 'Equipo'}
-                            </span>
-                          </div>
-                        );
-                      })}
-                      {b.bienes_ids.length > 5 && (
-                        <p className="text-[10px] text-indigo-600 font-medium text-center pt-1">
-                          + {b.bienes_ids.length - 5} equipos adicionales...
-                        </p>
-                      )}
-                    </div>
+                          )}
+                        </div>
+                        <span
+                          className={`text-[11px] font-bold ${
+                            b.activo ? 'text-emerald-600' : 'text-slate-400'
+                          }`}
+                        >
+                          {b.activo ? 'Activo' : 'Inactivo'}
+                        </span>
+                      </div>
 
-                    {/* Alerta de equipos del bloque trasladados fuera del AIP */}
-                    {(() => {
-                      const fueraAIP = b.bienes_ids
-                        .map((bid) => bienes.find((x) => x.id === bid))
-                        .filter((bien): bien is BienPatrimonial => {
-                          if (!bien) return false;
-                          const amb = ambientes.find((a) => a.id === bien.ambiente_id);
-                          return !esAmbientePrestable(amb);
-                        });
+                      <h4 className="text-sm font-bold text-slate-900 mb-1">{b.nombre}</h4>
+                      <p className="text-xs text-slate-500 mb-3">{b.descripcion || 'Sin descripción'}</p>
 
-                      if (fueraAIP.length === 0) return null;
-
-                      return (
-                        <div className="mt-2.5 space-y-1">
-                          {fueraAIP.map((bf) => {
-                            const ambNombre = ambientes.find((a) => a.id === bf.ambiente_id)?.nombre || 'Ambiente Externo';
-                            return (
+                      {/* Lista principal: renderiza ÚNICAMENTE equiposLibresAIP */}
+                      <div className="space-y-1 bg-slate-50 p-2.5 rounded-xl border border-slate-100 max-h-36 overflow-y-auto">
+                        {equiposLibresAIP.length === 0 ? (
+                          <p className="text-[11px] text-slate-400 text-center py-3 italic">
+                            Sin equipos disponibles en AIP en este bloque
+                          </p>
+                        ) : (
+                          <>
+                            {equiposLibresAIP.slice(0, 5).map((bien) => (
                               <div
-                                key={bf.id}
-                                className="px-2 py-1 bg-amber-50 border border-amber-200 rounded-lg text-[10px] text-amber-800 font-medium flex items-center justify-between"
+                                key={bien.id}
+                                className="flex items-center justify-between text-[11px] text-slate-700"
                               >
-                                <span className="font-mono font-bold">{bf.etiqueta_interna}</span>
-                                <span className="truncate max-w-[180px] text-amber-700">
-                                  Distribuido en {ambNombre} — Excluido de préstamos
+                                <span className="font-mono font-bold text-slate-900">
+                                  {bien.etiqueta_interna || bien.id.slice(0, 6)}
+                                </span>
+                                <span className="text-slate-500 truncate max-w-[140px]">
+                                  {bien.denominacion || 'Equipo'}
                                 </span>
                               </div>
-                            );
-                          })}
+                            ))}
+                            {equiposLibresAIP.length > 5 && (
+                              <p className="text-[10px] text-indigo-600 font-medium text-center pt-1">
+                                + {equiposLibresAIP.length - 5} equipos adicionales en AIP...
+                              </p>
+                            )}
+                          </>
+                        )}
+                      </div>
+
+                      {/* Sección inferior de distribuidos fuera del AIP sin texto cortado */}
+                      {equiposDistribuidos.length > 0 && (
+                        <div className="mt-3 pt-2.5 border-t border-dashed border-amber-200 bg-amber-50/60 p-2.5 rounded-xl">
+                          <div className="flex items-center space-x-1.5 text-amber-900 text-[11px] font-bold mb-1.5">
+                            <AlertCircle className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />
+                            <span>Distribuidos fuera del AIP (excluidos de préstamo):</span>
+                          </div>
+                          <div className="space-y-1.5 max-h-32 overflow-y-auto">
+                            {equiposDistribuidos.map((bf) => {
+                              const ambNombre =
+                                ambientes.find((a) => a.id === bf.ambiente_id)?.nombre ||
+                                (bf.estado_operativo === 'DE_BAJA' ? 'De Baja' : 'Oficina Externa');
+                              return (
+                                <div
+                                  key={bf.id}
+                                  className="px-2 py-1 bg-white border border-amber-200 rounded-lg text-[11px] flex items-center justify-between gap-2"
+                                >
+                                  <div className="flex items-center space-x-1.5 min-w-0">
+                                    <span className="font-mono font-bold text-slate-900 flex-shrink-0">
+                                      {bf.etiqueta_interna}
+                                    </span>
+                                    <span className="text-amber-800 font-medium whitespace-normal">
+                                      En {ambNombre}
+                                    </span>
+                                  </div>
+                                  {esAdmin && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleQuitarEquipoDeBloque(b, bf.id)}
+                                      disabled={guardando}
+                                      className="text-[10px] text-amber-700 hover:text-rose-700 hover:bg-rose-50 px-1.5 py-0.5 rounded border border-amber-200 transition-colors flex-shrink-0 font-medium disabled:opacity-50"
+                                      title={`Desvincular ${bf.etiqueta_interna} de este bloque`}
+                                    >
+                                      Quitar del bloque
+                                    </button>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
                         </div>
-                      );
-                    })()}
-                  </div>
+                      )}
+                    </div>
 
                   {esAdmin && (
                     <div className="pt-3 mt-3 border-t border-slate-100 flex items-center justify-end space-x-2">
@@ -780,9 +930,10 @@ export const CatalogosPedagogicosTab: React.FC<CatalogosPedagogicosTabProps> = (
                     </div>
                   )}
                 </div>
-              ))
-            )}
-          </div>
+              );
+            })
+          )}
+        </div>
         </div>
       )}
 
