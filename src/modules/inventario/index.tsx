@@ -100,8 +100,10 @@ export const InventarioModule: React.FC = () => {
     cargarDatos();
   }, []);
 
-  const cargarDatos = async () => {
-    setLoading(true);
+  const cargarDatos = async (silencioso = false) => {
+    if (!silencioso) {
+      setLoading(true);
+    }
     try {
       const [bienesData, ambData, catData, configData] = await Promise.all([
         bienRepository.listar(),
@@ -117,7 +119,9 @@ export const InventarioModule: React.FC = () => {
       console.error('Error al cargar inventario:', err);
       setFeedback({ tipo: 'err', msg: 'Error al consultar inventario patrimonial.' });
     } finally {
-      setLoading(false);
+      if (!silencioso) {
+        setLoading(false);
+      }
     }
   };
 
@@ -340,11 +344,15 @@ export const InventarioModule: React.FC = () => {
     );
     if (!confirmar) return;
 
+    const scrollPos = window.scrollY;
     try {
       setBienConflictoReactivar(null);
       const operador = user ? { uid: user.uid, email: user.email || '' } : undefined;
       await bienRepository.reactivar(bien.id, operador);
-      await cargarDatos();
+      await cargarDatos(true);
+      requestAnimationFrame(() => {
+        window.scrollTo({ top: scrollPos, behavior: 'instant' });
+      });
       setFeedback({
         tipo: 'ok',
         msg: `El bien "${bien.etiqueta_interna || bien.codigo_patrimonial}" fue reactivado y reincorporado con éxito al inventario activo como OPERATIVO.`,
@@ -383,6 +391,7 @@ export const InventarioModule: React.FC = () => {
 
   const handleGuardarLoteRapido = async () => {
     if (!bienParaLoteRapido) return;
+    const scrollPos = window.scrollY;
     setGuardandoLoteRapido(true);
     let etiquetaFinal = '';
     let colorFinal = '';
@@ -403,11 +412,29 @@ export const InventarioModule: React.FC = () => {
         },
         operador
       );
-      await cargarDatos();
+
+      // Actualización optimista local inmediata para evitar parpadeos en la fila
+      setBienes((prev) =>
+        prev.map((b) =>
+          b.id === bienParaLoteRapido.id
+            ? { ...b, lote_etiqueta: etiquetaFinal, lote_color: colorFinal }
+            : b
+        )
+      );
+
       setModalRapidoLoteOpen(false);
+
       setFeedback({
         tipo: 'ok',
         msg: `Lote de ${bienParaLoteRapido.etiqueta_interna || bienParaLoteRapido.codigo_patrimonial} actualizado a ${etiquetaFinal || 'Sin Lote'}.`,
+      });
+
+      // Refresco en segundo plano silencioso sin desmontar la tabla ni resetear el scroll
+      await cargarDatos(true);
+
+      // Preservar exactamente la posición de desplazamiento
+      requestAnimationFrame(() => {
+        window.scrollTo({ top: scrollPos, behavior: 'instant' });
       });
     } catch (err: any) {
       console.error('Error al actualizar lote rápido:', err);
@@ -1144,6 +1171,7 @@ export const InventarioModule: React.FC = () => {
           categorias={categorias}
           onClose={() => setModalFormOpen(false)}
           onSuccess={() => {
+            const scrollPos = window.scrollY;
             setModalFormOpen(false);
             setFeedback({
               tipo: 'ok',
@@ -1151,7 +1179,11 @@ export const InventarioModule: React.FC = () => {
                 ? 'Bien patrimonial actualizado con éxito.'
                 : 'Nuevo bien tecnológico registrado exitosamente.',
             });
-            cargarDatos();
+            cargarDatos(true).then(() => {
+              requestAnimationFrame(() => {
+                window.scrollTo({ top: scrollPos, behavior: 'instant' });
+              });
+            });
           }}
         />
       )}
@@ -1176,12 +1208,17 @@ export const InventarioModule: React.FC = () => {
           bien={bienParaBaja}
           onClose={() => setModalBajaOpen(false)}
           onSuccess={() => {
+            const scrollPos = window.scrollY;
             setModalBajaOpen(false);
             setFeedback({
               tipo: 'ok',
               msg: `Baja lógica registrada para el bien ${bienParaBaja.codigo_patrimonial}.`,
             });
-            cargarDatos();
+            cargarDatos(true).then(() => {
+              requestAnimationFrame(() => {
+                window.scrollTo({ top: scrollPos, behavior: 'instant' });
+              });
+            });
           }}
         />
       )}
