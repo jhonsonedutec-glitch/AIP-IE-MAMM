@@ -16,6 +16,7 @@ import {
   Palette,
   X,
   Sparkles,
+  QrCode,
 } from 'lucide-react';
 import {
   BienPatrimonial,
@@ -74,6 +75,7 @@ export const InventarioModule: React.FC = () => {
   const [loteRapidoColor, setLoteRapidoColor] = useState<string>('#EA580C');
   const [guardandoLoteRapido, setGuardandoLoteRapido] = useState(false);
   const [regularizandoVerde, setRegularizandoVerde] = useState(false);
+  const [asignandoEtiquetas, setAsignandoEtiquetas] = useState(false);
 
   useEffect(() => {
     cargarDatos();
@@ -192,6 +194,35 @@ export const InventarioModule: React.FC = () => {
       setFeedback({ tipo: 'err', msg: 'Error al auto-etiquetar equipos con LOTE VERDE.' });
     } finally {
       setRegularizandoVerde(false);
+    }
+  };
+
+  // Detección de equipos activos sin etiqueta QR (S/E) para regularización automática
+  const bienesSinEtiqueta = useMemo(() => {
+    if (!esAdmin) return [];
+    return bienes.filter((b) => {
+      if (b.estado_operativo === 'DE_BAJA') return false;
+      const etq = (b.etiqueta_interna || '').trim().toUpperCase();
+      return !etq || etq === 'S/E' || etq === 'SIN ETIQUETA' || etq === 'S/C';
+    });
+  }, [bienes, esAdmin]);
+
+  const handleAsignarEtiquetasFaltantes = async () => {
+    if (bienesSinEtiqueta.length === 0) return;
+    setAsignandoEtiquetas(true);
+    try {
+      const operador = user ? { uid: user.uid, email: user.email || '' } : undefined;
+      const res = await bienRepository.asignarEtiquetasFaltantes(operador);
+      await cargarDatos();
+      setFeedback({
+        tipo: 'ok',
+        msg: `Se autogeneraron y asignaron exitosamente etiquetas QR correlativas a ${res.actualizados} equipos.`,
+      });
+    } catch (err: any) {
+      console.error('Error al regularizar etiquetas faltantes:', err);
+      setFeedback({ tipo: 'err', msg: 'Error al generar etiquetas QR correlativas.' });
+    } finally {
+      setAsignandoEtiquetas(false);
     }
   };
 
@@ -547,6 +578,33 @@ export const InventarioModule: React.FC = () => {
         </div>
       )}
 
+      {/* Banner de Regularización de Códigos QR (S/E) */}
+      {bienesSinEtiqueta.length > 0 && esAdmin && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 bg-indigo-50 border border-indigo-200 rounded-xl text-indigo-950 text-xs shadow-xs">
+          <div className="flex items-center space-x-2">
+            <QrCode className="w-4 h-4 text-indigo-600 shrink-0" />
+            <span>
+              Se detectaron <strong>{bienesSinEtiqueta.length} equipos activos</strong> sin código QR asignado (figuran como <code>S/E</code>).
+            </span>
+          </div>
+          <button
+            type="button"
+            disabled={asignandoEtiquetas}
+            onClick={handleAsignarEtiquetasFaltantes}
+            className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold rounded-lg shadow-xs transition-colors shrink-0 flex items-center space-x-1.5"
+          >
+            {asignandoEtiquetas ? (
+              <>
+                <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin inline-block" />
+                <span>Asignando correlativos...</span>
+              </>
+            ) : (
+              <span>Autogenerar códigos QR ({bienesSinEtiqueta.length} equipos)</span>
+            )}
+          </button>
+        </div>
+      )}
+
       {/* Tabla de Inventario */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
         {loading ? (
@@ -583,6 +641,11 @@ export const InventarioModule: React.FC = () => {
                 {bienesPaginados.map((b, index) => (
                   <tr
                     key={b.id}
+                    style={{
+                      borderLeftWidth: '4px',
+                      borderLeftStyle: 'solid',
+                      borderLeftColor: b.lote_color || 'transparent',
+                    }}
                     className={`hover:bg-slate-50/70 transition-colors ${
                       b.estado_operativo === 'DE_BAJA' ? 'bg-slate-50/40 text-slate-400 opacity-75' : ''
                     }`}
@@ -592,23 +655,18 @@ export const InventarioModule: React.FC = () => {
                     </td>
                     <td className="py-3 px-3">
                       <div className="flex flex-col space-y-1">
-                        <span className="font-mono font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 text-[11px] inline-block w-fit">
+                        <span className="font-mono font-semibold text-slate-800 bg-slate-100 px-2 py-0.5 rounded border border-slate-300 text-[11px] inline-block w-fit">
                           {b.etiqueta_interna || 'S/E'}
                         </span>
                         {b.lote_etiqueta && (
                           <span
-                            className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[9px] font-bold border w-fit"
+                            className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-md text-[9px] font-bold text-white shadow-xs tracking-wide w-fit uppercase"
                             style={{
-                              backgroundColor: `${b.lote_color || '#6366F1'}15`,
-                              borderColor: `${b.lote_color || '#6366F1'}60`,
-                              color: b.lote_color || '#6366F1',
+                              backgroundColor: b.lote_color || '#475569',
                             }}
                             title={`Lote: ${b.lote_etiqueta}`}
                           >
-                            <span
-                              className="w-1.5 h-1.5 rounded-full inline-block shrink-0"
-                              style={{ backgroundColor: b.lote_color || '#6366F1' }}
-                            />
+                            <span className="w-1.5 h-1.5 rounded-full bg-white inline-block shrink-0" />
                             <span className="truncate max-w-[100px]">{b.lote_etiqueta}</span>
                           </span>
                         )}
@@ -646,18 +704,19 @@ export const InventarioModule: React.FC = () => {
                       </span>
                     </td>
                     <td className="py-3 px-3">
-                      <span
-                        className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                          b.estado_operativo === 'OPERATIVO'
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : b.estado_operativo === 'PRESTADO'
-                            ? 'bg-indigo-100 text-indigo-800'
-                            : b.estado_operativo === 'EN_MANTENIMIENTO'
-                            ? 'bg-amber-100 text-amber-800'
-                            : 'bg-rose-100 text-rose-800'
-                        }`}
-                      >
-                        {b.estado_operativo}
+                      <span className="inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-medium bg-white border border-slate-200 text-slate-700 shadow-2xs">
+                        <span
+                          className={`w-2 h-2 rounded-full inline-block shrink-0 ${
+                            b.estado_operativo === 'OPERATIVO'
+                              ? 'bg-emerald-500'
+                              : b.estado_operativo === 'PRESTADO'
+                              ? 'bg-blue-500'
+                              : b.estado_operativo === 'EN_MANTENIMIENTO'
+                              ? 'bg-amber-500'
+                              : 'bg-rose-500'
+                          }`}
+                        />
+                        <span>{b.estado_operativo}</span>
                       </span>
                     </td>
                     <td className="py-3 px-3 text-right space-x-1">

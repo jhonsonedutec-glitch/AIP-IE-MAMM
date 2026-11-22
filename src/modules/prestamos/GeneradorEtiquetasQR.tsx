@@ -525,19 +525,14 @@ export const GeneradorEtiquetasQR: React.FC<GeneradorEtiquetasQRProps> = ({
                       )}
                       {bien.lote_etiqueta && (
                         <span
-                          className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[9px] font-bold border truncate"
+                          className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-md text-[9px] font-bold text-white shadow-xs tracking-wide uppercase truncate"
                           style={{
-                            backgroundColor: `${bien.lote_color || '#6366F1'}15`,
-                            borderColor: `${bien.lote_color || '#6366F1'}60`,
-                            color: bien.lote_color || '#6366F1',
+                            backgroundColor: bien.lote_color || '#475569',
                           }}
                           title={`Lote: ${bien.lote_etiqueta}`}
                         >
-                          <span
-                            className="w-1.5 h-1.5 rounded-full inline-block shrink-0"
-                            style={{ backgroundColor: bien.lote_color || '#6366F1' }}
-                          />
-                          <span className="truncate max-w-[80px]">{bien.lote_etiqueta}</span>
+                          <span className="w-1.5 h-1.5 rounded-full bg-white inline-block shrink-0" />
+                          <span className="truncate max-w-[90px]">{bien.lote_etiqueta}</span>
                         </span>
                       )}
                       {bien.estado_operativo === 'PRESTADO' && (
@@ -612,12 +607,14 @@ export const GeneradorEtiquetasQR: React.FC<GeneradorEtiquetasQRProps> = ({
                   }`}
                   style={{ minHeight: '135px' }}
                 >
-                  {/* Franja vertical de color de lote en el lateral izquierdo */}
+                  {/* Franja vertical de color de lote en el lateral izquierdo (mínimo 8px) */}
                   {mostrarFranjaColor && bien.lote_etiqueta && (
                     <div
-                      className="label-color-stripe absolute left-0 top-0 bottom-0 w-2 shrink-0 z-10"
+                      className="label-color-stripe absolute left-0 top-0 bottom-0 w-2.5 shrink-0 z-10"
                       style={{
-                        backgroundColor: bien.lote_color || '#6366F1',
+                        width: '8px',
+                        minWidth: '8px',
+                        backgroundColor: bien.lote_color || '#EA580C',
                         WebkitPrintColorAdjust: 'exact',
                         printColorAdjust: 'exact',
                       }}
@@ -640,19 +637,17 @@ export const GeneradorEtiquetasQR: React.FC<GeneradorEtiquetasQRProps> = ({
                     <div className="flex items-center space-x-1.5 shrink-0">
                       {bien.lote_etiqueta && (
                         <span
-                          className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[8.5px] font-black uppercase border tracking-tight"
+                          className="inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[8.5px] font-black uppercase text-white shadow-2xs tracking-wider"
                           style={{
-                            backgroundColor: `${bien.lote_color || '#6366F1'}18`,
-                            borderColor: bien.lote_color || '#6366F1',
-                            color: bien.lote_color || '#6366F1',
+                            backgroundColor: bien.lote_color || '#475569',
+                            color: '#ffffff',
                             WebkitPrintColorAdjust: 'exact',
                             printColorAdjust: 'exact',
                           }}
                         >
                           <span
-                            className="w-1.5 h-1.5 rounded-full inline-block shrink-0"
+                            className="w-1.5 h-1.5 rounded-full bg-white inline-block shrink-0"
                             style={{
-                              backgroundColor: bien.lote_color || '#6366F1',
                               WebkitPrintColorAdjust: 'exact',
                               printColorAdjust: 'exact',
                             }}

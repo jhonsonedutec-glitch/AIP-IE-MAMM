@@ -933,6 +933,16 @@ export const CatalogosPedagogicosTab: React.FC<CatalogosPedagogicosTabProps> = (
                                     <span className="font-mono font-bold text-slate-900 flex-shrink-0">
                                       {bien.etiqueta_interna || bien.id.slice(0, 6)}
                                     </span>
+                                    {bien.lote_etiqueta && (
+                                      <span
+                                        className="inline-flex items-center space-x-1 px-1.5 py-0.2 rounded text-[8.5px] font-bold text-white shadow-2xs tracking-wide shrink-0 uppercase"
+                                        style={{ backgroundColor: bien.lote_color || '#475569' }}
+                                        title={`Lote: ${bien.lote_etiqueta}`}
+                                      >
+                                        <span className="w-1.5 h-1.5 rounded-full bg-white inline-block shrink-0" />
+                                        <span className="truncate max-w-[65px]">{bien.lote_etiqueta}</span>
+                                      </span>
+                                    )}
                                     <span className="text-slate-500 truncate max-w-[120px]">
                                       &bull; {bien.denominacion}
                                     </span>
@@ -940,25 +950,30 @@ export const CatalogosPedagogicosTab: React.FC<CatalogosPedagogicosTabProps> = (
 
                                   <div className="flex-shrink-0">
                                     {bien.estado_operativo === 'OPERATIVO' ? (
-                                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                        Disponible
+                                      <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-white border border-slate-200 text-slate-700 shadow-2xs">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block shrink-0" />
+                                        <span>Disponible</span>
                                       </span>
                                     ) : bien.estado_operativo === 'PRESTADO' ? (
                                       <span
-                                        className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 cursor-help"
+                                        className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-white border border-slate-200 text-slate-700 shadow-2xs cursor-help"
                                         title={
                                           prestamoActivo
                                             ? `Préstamo activo: ${prestamoActivo.ambiente_uso} — ${prestamoActivo.docente_nombre}`
                                             : 'En préstamo activo'
                                         }
                                       >
-                                        {prestamoActivo?.ambiente_uso
-                                          ? `En préstamo • ${prestamoActivo.ambiente_uso}`
-                                          : 'En préstamo'}
+                                        <span className="w-1.5 h-1.5 rounded-full bg-blue-500 inline-block shrink-0" />
+                                        <span>
+                                          {prestamoActivo?.ambiente_uso
+                                            ? `En préstamo • ${prestamoActivo.ambiente_uso}`
+                                            : 'En préstamo'}
+                                        </span>
                                       </span>
                                     ) : (
-                                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
-                                        Mantenimiento
+                                      <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-white border border-slate-200 text-slate-700 shadow-2xs">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 inline-block shrink-0" />
+                                        <span>Mantenimiento</span>
                                       </span>
                                     )}
                                   </div>
@@ -998,6 +1013,16 @@ export const CatalogosPedagogicosTab: React.FC<CatalogosPedagogicosTabProps> = (
                                     <span className="font-mono font-bold text-slate-900 flex-shrink-0">
                                       {bf.etiqueta_interna}
                                     </span>
+                                    {bf.lote_etiqueta && (
+                                      <span
+                                        className="inline-flex items-center space-x-1 px-1.5 py-0.2 rounded text-[8.5px] font-bold text-white shadow-2xs tracking-wide shrink-0 uppercase"
+                                        style={{ backgroundColor: bf.lote_color || '#475569' }}
+                                        title={`Lote: ${bf.lote_etiqueta}`}
+                                      >
+                                        <span className="w-1.5 h-1.5 rounded-full bg-white inline-block shrink-0" />
+                                        <span className="truncate max-w-[65px]">{bf.lote_etiqueta}</span>
+                                      </span>
+                                    )}
                                     <span className="text-amber-800 font-medium whitespace-normal">
                                       En {ambNombre}
                                     </span>
@@ -1401,41 +1426,35 @@ export const CatalogosPedagogicosTab: React.FC<CatalogosPedagogicosTabProps> = (
                             <span className="font-mono text-slate-400 text-[11px] font-semibold shrink-0">
                               {String(idx + 1).padStart(2, '0')}.
                             </span>
+                            <span className="font-mono font-bold shrink-0">{bien.etiqueta_interna}</span>
                             {bien.lote_etiqueta && (
                               <span
-                                className="w-2.5 h-2.5 rounded-full inline-block shrink-0 shadow-xs border border-white"
-                                style={{ backgroundColor: bien.lote_color || '#6366F1' }}
+                                className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[8.5px] font-bold text-white shadow-2xs tracking-wide shrink-0 uppercase"
+                                style={{
+                                  backgroundColor: bien.lote_color || '#475569',
+                                }}
                                 title={`Lote: ${bien.lote_etiqueta}`}
-                              />
+                              >
+                                <span className="w-1.5 h-1.5 rounded-full bg-white inline-block shrink-0" />
+                                <span className="truncate max-w-[75px]">{bien.lote_etiqueta}</span>
+                              </span>
                             )}
-                            <span className="font-mono font-bold shrink-0">{bien.etiqueta_interna}</span>
                             <span className="truncate max-w-[130px] text-slate-500">
                               &bull; {bien.denominacion} ({bien.marca})
                             </span>
-                            {bien.lote_etiqueta && (
-                              <span
-                                className="text-[9px] px-1 py-0.2 rounded font-bold border truncate max-w-[70px] shrink-0"
-                                style={{
-                                  backgroundColor: `${bien.lote_color || '#6366F1'}15`,
-                                  borderColor: `${bien.lote_color || '#6366F1'}50`,
-                                  color: bien.lote_color || '#6366F1',
-                                }}
-                              >
-                                {bien.lote_etiqueta}
-                              </span>
-                            )}
                             <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-medium border border-slate-200 shrink-0">
                               {ambEquipo?.nombre || 'AIP'}
                             </span>
                           </div>
-                          <span
-                            className={`text-[10px] px-1.5 py-0.5 rounded font-bold shrink-0 ml-1 ${
-                              bien.estado_operativo === 'OPERATIVO'
-                                ? 'bg-emerald-100 text-emerald-800'
-                                : 'bg-amber-100 text-amber-800'
-                            }`}
-                          >
-                            {bien.estado_operativo}
+                          <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-white border border-slate-200 text-slate-700 shrink-0 ml-1">
+                            <span
+                              className={`w-1.5 h-1.5 rounded-full inline-block shrink-0 ${
+                                bien.estado_operativo === 'OPERATIVO'
+                                  ? 'bg-emerald-500'
+                                  : 'bg-amber-500'
+                              }`}
+                            />
+                            <span>{bien.estado_operativo}</span>
                           </span>
                         </div>
                       );

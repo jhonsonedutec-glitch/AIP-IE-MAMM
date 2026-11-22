@@ -547,7 +547,7 @@ export const DistribucionModule: React.FC = () => {
                           <td className="p-3 text-center font-mono text-slate-400 font-medium">
                             {String(idx + 1).padStart(2, '0')}
                           </td>
-                          <td className="p-3 font-mono font-bold text-emerald-700">
+                          <td className="p-3 font-mono font-semibold text-slate-800">
                             {b.etiqueta_interna || '—'}
                           </td>
                           <td className="p-3 font-mono text-slate-700">
@@ -569,19 +569,20 @@ export const DistribucionModule: React.FC = () => {
                             </span>
                           </td>
                           <td className="p-3 text-center">
-                            {b.estado_operativo === 'OPERATIVO' ? (
-                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                                OPERATIVO
-                              </span>
-                            ) : b.estado_operativo === 'PRESTADO' ? (
-                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-800 border border-indigo-200">
-                                PRESTADO
-                              </span>
-                            ) : (
-                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
-                                {b.estado_operativo}
-                              </span>
-                            )}
+                            <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-white border border-slate-200 text-slate-700 shadow-2xs">
+                              <span
+                                className={`w-1.5 h-1.5 rounded-full inline-block shrink-0 ${
+                                  b.estado_operativo === 'OPERATIVO'
+                                    ? 'bg-emerald-500'
+                                    : b.estado_operativo === 'PRESTADO'
+                                    ? 'bg-blue-500'
+                                    : b.estado_operativo === 'EN_MANTENIMIENTO'
+                                    ? 'bg-amber-500'
+                                    : 'bg-rose-500'
+                                }`}
+                              />
+                              <span>{b.estado_operativo}</span>
+                            </span>
                           </td>
                           {isAdmin && (
                             <td className="p-3 text-right">

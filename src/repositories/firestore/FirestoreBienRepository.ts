@@ -81,18 +81,67 @@ export class FirestoreBienRepository implements IBienRepository {
   }
 
   /**
+   * Obtiene el prefijo de etiqueta asignado a una categoría o inferido de la denominación.
+   */
+  private resolverPrefijo(
+    categoria?: { prefijo_etiqueta?: string; nombre?: string } | null,
+    denominacion?: string
+  ): string {
+    if (categoria?.prefijo_etiqueta?.trim()) {
+      return categoria.prefijo_etiqueta.trim().toUpperCase();
+    }
+    const texto = `${categoria?.nombre || ''} ${denominacion || ''}`.toUpperCase();
+    if (texto.includes('LAPTOP') || texto.includes('PORTATIL') || texto.includes('PORTÁTIL')) return 'LAP';
+    if (texto.includes('PROYECTOR') || texto.includes('ECRAN')) return 'PROY';
+    if (
+      texto.includes('PC') ||
+      texto.includes('COMPUTADORA') ||
+      texto.includes('COMPUTO') ||
+      texto.includes('CÓMPUTO') ||
+      texto.includes('ESCRITORIO')
+    ) {
+      return 'PC';
+    }
+    if (texto.includes('ROBOTICA') || texto.includes('ROBÓTICA') || texto.includes('LEGO') || texto.includes('WEDO')) {
+      return 'ROB';
+    }
+    return 'EQ';
+  }
+
+  /**
+   * Calcula el mapa del correlativo numérico máximo actualmente usado para cada prefijo.
+   */
+  private async calcularMaximosPorPrefijo(): Promise<Map<string, number>> {
+    const snap = await getDocs(this.colRef);
+    const maximos = new Map<string, number>();
+
+    for (const d of snap.docs) {
+      const data = d.data();
+      const etq = (data.etiqueta_interna || '').trim().toUpperCase();
+      if (!etq || etq === 'S/E' || etq === 'SIN ETIQUETA' || etq === 'S/C') continue;
+
+      const match = etq.match(/^([A-Z0-9]+)[-_]?(\d+)$/i);
+      if (match) {
+        const pref = match[1].toUpperCase();
+        const num = parseInt(match[2], 10);
+        if (!isNaN(num)) {
+          maximos.set(pref, Math.max(maximos.get(pref) || 0, num));
+        }
+      }
+    }
+
+    return maximos;
+  }
+
+  /**
    * Genera una etiqueta interna correlativa única si no fue proporcionada (ej. LAP-001)
    */
-  private async generarEtiquetaInterna(categoriaId: string): Promise<string> {
+  private async generarEtiquetaInterna(categoriaId: string, denominacion?: string): Promise<string> {
     const categoria = await categoriaRepository.obtenerPorId(categoriaId);
-    const prefijo = (categoria?.prefijo_etiqueta || 'EQ').toUpperCase().trim();
-
-    // Consultar bienes de la misma categoría para calcular el correlativo
-    const q = query(this.colRef, where('categoria_id', '==', categoriaId));
-    const snap = await getDocs(q);
-    const total = snap.size + 1;
-    const correlativo = String(total).padStart(3, '0');
-    return `${prefijo}-${correlativo}`;
+    const prefijo = this.resolverPrefijo(categoria, denominacion);
+    const maximos = await this.calcularMaximosPorPrefijo();
+    const siguienteNum = (maximos.get(prefijo) || 0) + 1;
+    return `${prefijo}-${String(siguienteNum).padStart(3, '0')}`;
   }
 
   /**
@@ -143,10 +192,10 @@ export class FirestoreBienRepository implements IBienRepository {
   ): Promise<string> {
     await this.validarUnicidad(bien.codigo_patrimonial, bien.serie);
 
-    // Asignar etiqueta interna si está vacía
+    // Asignar etiqueta interna si está vacía o es S/E
     let etiqueta = bien.etiqueta_interna?.trim();
-    if (!etiqueta) {
-      etiqueta = await this.generarEtiquetaInterna(bien.categoria_id);
+    if (!etiqueta || etiqueta.toUpperCase() === 'S/E' || etiqueta.toUpperCase() === 'SIN ETIQUETA') {
+      etiqueta = await this.generarEtiquetaInterna(bien.categoria_id, bien.denominacion);
     }
 
     // Código QR por defecto es la etiqueta interna
@@ -276,7 +325,8 @@ export class FirestoreBienRepository implements IBienRepository {
   }
 
   /**
-   * Inserción masiva de bienes usando writeBatch en bloques de máximo 400 documentos
+   * Inserción masiva de bienes usando writeBatch en bloques de máximo 400 documentos,
+   * garantizando que todo bien sin etiqueta o con "S/E" reciba automáticamente un código correlativo (ej. LAP-001).
    */
   async importarLote(
     bienes: Array<Omit<BienPatrimonial, 'id' | 'fecha_registro' | 'actualizado_en'>>,
@@ -285,6 +335,14 @@ export class FirestoreBienRepository implements IBienRepository {
     if (bienes.length === 0) {
       return { insertados: 0, omitidos: 0, fallidos: 0 };
     }
+
+    const [todasCategorias, maximos] = await Promise.all([
+      categoriaRepository.listar(),
+      this.calcularMaximosPorPrefijo(),
+    ]);
+
+    const catMap = new Map<string, { prefijo_etiqueta?: string; nombre?: string }>();
+    todasCategorias.forEach((c) => catMap.set(c.id, c));
 
     const CHUNK_SIZE = 400; // Respetar holgadamente el límite de 500 ops de Firestore
     let insertados = 0;
@@ -297,6 +355,32 @@ export class FirestoreBienRepository implements IBienRepository {
       for (const item of chunk) {
         try {
           const docRef = doc(this.colRef);
+
+          // Resolver etiqueta interna automática si no se ingresó o es S/E
+          let etq = item.etiqueta_interna?.trim() || '';
+          const esFaltante =
+            !etq ||
+            etq.toUpperCase() === 'S/E' ||
+            etq.toUpperCase() === 'SIN ETIQUETA' ||
+            etq.toUpperCase() === 'S/C';
+
+          if (esFaltante) {
+            const cat = item.categoria_id ? catMap.get(item.categoria_id) : undefined;
+            const prefijo = this.resolverPrefijo(cat, item.denominacion);
+            const siguienteNum = (maximos.get(prefijo) || 0) + 1;
+            maximos.set(prefijo, siguienteNum);
+            etq = `${prefijo}-${String(siguienteNum).padStart(3, '0')}`;
+          } else {
+            const match = etq.match(/^([A-Z0-9]+)[-_]?(\d+)$/i);
+            if (match) {
+              const pref = match[1].toUpperCase();
+              const num = parseInt(match[2], 10);
+              if (!isNaN(num)) {
+                maximos.set(pref, Math.max(maximos.get(pref) || 0, num));
+              }
+            }
+          }
+
           const rawItem = {
             ...item,
             codigo_patrimonial: item.codigo_patrimonial?.trim() || 'S/C',
@@ -310,8 +394,11 @@ export class FirestoreBienRepository implements IBienRepository {
             observacion: item.observacion?.trim() || '',
             lote_etiqueta: item.lote_etiqueta?.trim() || '',
             lote_color: item.lote_color?.trim() || '',
-            etiqueta_interna: item.etiqueta_interna?.trim() || '',
-            codigo_qr: item.codigo_qr?.trim() || item.etiqueta_interna?.trim() || '',
+            etiqueta_interna: etq,
+            codigo_qr:
+              item.codigo_qr?.trim() && item.codigo_qr !== 'S/E' && item.codigo_qr !== 'S/C'
+                ? item.codigo_qr.trim()
+                : etq,
             total_prestamos: 0,
             fecha_registro: serverTimestamp(),
             actualizado_en: serverTimestamp(),
@@ -341,6 +428,109 @@ export class FirestoreBienRepository implements IBienRepository {
     });
 
     return { insertados, omitidos: 0, fallidos };
+  }
+
+  /**
+   * Regulariza y asigna etiquetas QR correlativas (ej. LAP-XXX) a todos los bienes activos
+   * que actualmente carecen de etiqueta o tienen "S/E" en Firestore.
+   */
+  async asignarEtiquetasFaltantes(
+    operador?: OperadorInfo
+  ): Promise<{ actualizados: number; asignadas: Array<{ id: string; etiqueta_interna: string }> }> {
+    const [todasCategorias, snap] = await Promise.all([
+      categoriaRepository.listar(),
+      getDocs(this.colRef),
+    ]);
+
+    const catMap = new Map<string, { prefijo_etiqueta?: string; nombre?: string }>();
+    todasCategorias.forEach((c) => catMap.set(c.id, c));
+
+    // 1. Calcular número máximo actual por prefijo considerando bienes con etiqueta válida
+    const maximos = new Map<string, number>();
+    const bienesSinEtiqueta: Array<{ id: string; data: any }> = [];
+
+    for (const d of snap.docs) {
+      const data = d.data();
+      const etq = (data.etiqueta_interna || '').trim();
+      const esFaltante =
+        !etq ||
+        etq.toUpperCase() === 'S/E' ||
+        etq.toUpperCase() === 'SIN ETIQUETA' ||
+        etq.toUpperCase() === 'S/C';
+
+      if (esFaltante) {
+        if (data.estado_operativo !== 'DE_BAJA') {
+          bienesSinEtiqueta.push({ id: d.id, data });
+        }
+      } else {
+        const match = etq.match(/^([A-Z0-9]+)[-_]?(\d+)$/i);
+        if (match) {
+          const pref = match[1].toUpperCase();
+          const num = parseInt(match[2], 10);
+          if (!isNaN(num)) {
+            maximos.set(pref, Math.max(maximos.get(pref) || 0, num));
+          }
+        }
+      }
+    }
+
+    if (bienesSinEtiqueta.length === 0) {
+      return { actualizados: 0, asignadas: [] };
+    }
+
+    // Ordenar bienes faltantes por fecha de registro o denominación para asignar correlativos ordenados
+    bienesSinEtiqueta.sort((a, b) => {
+      const fechaA = a.data.fecha_registro?.toDate?.()?.getTime() || 0;
+      const fechaB = b.data.fecha_registro?.toDate?.()?.getTime() || 0;
+      if (fechaA !== fechaB) return fechaA - fechaB;
+      return (a.data.denominacion || '').localeCompare(b.data.denominacion || '');
+    });
+
+    const asignadas: Array<{ id: string; etiqueta_interna: string }> = [];
+    const CHUNK_SIZE = 400;
+
+    for (let i = 0; i < bienesSinEtiqueta.length; i += CHUNK_SIZE) {
+      const chunk = bienesSinEtiqueta.slice(i, i + CHUNK_SIZE);
+      const batch = writeBatch(db);
+
+      for (const item of chunk) {
+        const cat = item.data.categoria_id ? catMap.get(item.data.categoria_id) : undefined;
+        const prefijo = this.resolverPrefijo(cat, item.data.denominacion);
+        const siguienteNum = (maximos.get(prefijo) || 0) + 1;
+        maximos.set(prefijo, siguienteNum);
+
+        const nuevaEtiqueta = `${prefijo}-${String(siguienteNum).padStart(3, '0')}`;
+        const ref = doc(this.colRef, item.id);
+
+        batch.update(ref, {
+          etiqueta_interna: nuevaEtiqueta,
+          codigo_qr:
+            item.data.codigo_qr && item.data.codigo_qr !== 'S/E' && item.data.codigo_qr !== 'S/C'
+              ? item.data.codigo_qr
+              : nuevaEtiqueta,
+          actualizado_en: serverTimestamp(),
+        });
+
+        asignadas.push({ id: item.id, etiqueta_interna: nuevaEtiqueta });
+      }
+
+      await batch.commit();
+    }
+
+    // Registro de auditoría
+    const operId = operador?.uid || auth.currentUser?.uid || '';
+    const operEmail = operador?.email || auth.currentUser?.email || '';
+
+    await auditoriaRepository.registrar({
+      usuario_id: operId,
+      usuario_email: operEmail,
+      accion: 'UPDATE',
+      coleccion: 'bienes',
+      documento_id: 'regularizar_etiquetas',
+      detalle: `Autogeneración y asignación de etiquetas QR correlativas a ${asignadas.length} equipos sin código (S/E).`,
+    });
+
+    return { actualizados: asignadas.length, asignadas };
   }
 
   /**

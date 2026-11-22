@@ -98,6 +98,9 @@ export interface IBienRepository {
     loteColor: string,
     usuarioOperador?: OperadorInfo
   ): Promise<void>;
+  asignarEtiquetasFaltantes(
+    usuarioOperador?: OperadorInfo
+  ): Promise<{ actualizados: number; asignadas: Array<{ id: string; etiqueta_interna: string }> }>;
 }
 
 export interface IPrestamoRepository {

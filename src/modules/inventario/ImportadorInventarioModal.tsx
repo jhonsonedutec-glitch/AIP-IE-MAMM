@@ -526,6 +526,7 @@ export const ImportadorInventarioModal: React.FC<ImportadorInventarioModalProps>
                     <tr>
                       <th className="py-2 px-3 w-12 text-center">N°</th>
                       <th className="py-2 px-3">Estado</th>
+                      <th className="py-2 px-3">Etiqueta QR</th>
                       <th className="py-2 px-3">Lote</th>
                       <th className="py-2 px-3">Denominación</th>
                       <th className="py-2 px-3">Marca / Modelo</th>
@@ -566,20 +567,26 @@ export const ImportadorInventarioModal: React.FC<ImportadorInventarioModalProps>
                             </span>
                           )}
                         </td>
+                        <td className="py-1.5 px-3 font-mono font-semibold">
+                          {f.etiqueta_interna && f.etiqueta_interna !== 'S/E' ? (
+                            <span className="text-slate-800 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-300 text-[10px]">
+                              {f.etiqueta_interna}
+                            </span>
+                          ) : (
+                            <span className="text-indigo-600 font-normal italic text-[10px] bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200">
+                              (Autogenerar)
+                            </span>
+                          )}
+                        </td>
                         <td className="py-1.5 px-3">
                           {f.lote_etiqueta ? (
                             <span
-                              className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-bold border"
+                              className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[9px] font-bold text-white shadow-2xs tracking-wide uppercase"
                               style={{
-                                backgroundColor: `${f.lote_color || '#6366F1'}15`,
-                                borderColor: `${f.lote_color || '#6366F1'}50`,
-                                color: f.lote_color || '#6366F1',
+                                backgroundColor: f.lote_color || '#475569',
                               }}
                             >
-                              <span
-                                className="w-1.5 h-1.5 rounded-full inline-block shrink-0"
-                                style={{ backgroundColor: f.lote_color || '#6366F1' }}
-                              />
+                              <span className="w-1.5 h-1.5 rounded-full bg-white inline-block shrink-0" />
                               <span className="truncate max-w-[90px]">{f.lote_etiqueta}</span>
                             </span>
                           ) : (
