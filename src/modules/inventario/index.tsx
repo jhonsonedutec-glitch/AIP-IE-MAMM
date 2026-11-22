@@ -17,6 +17,7 @@ import {
   X,
   Sparkles,
   QrCode,
+  ShieldAlert,
 } from 'lucide-react';
 import {
   BienPatrimonial,
@@ -24,6 +25,9 @@ import {
   CategoriaEquipo,
   COLORES_LOTE_PREDEFINIDOS,
   deducirColorLote,
+  GrupoDuplicado,
+  normalizarCodigoPatrimonial,
+  normalizarSerie,
 } from '@/types';
 import { bienRepository, ambienteRepository, categoriaRepository } from '@/repositories';
 import { useAuth } from '@/hooks';
@@ -31,6 +35,7 @@ import { BienFormModal } from './BienFormModal';
 import { BienDetalleModal } from './BienDetalleModal';
 import { BajaBienModal } from './BajaBienModal';
 import { ImportadorInventarioModal } from './ImportadorInventarioModal';
+import { ModalLimpiezaDuplicados } from './ModalLimpiezaDuplicados';
 
 const ITEMS_POR_PAGINA = 20;
 
@@ -76,6 +81,7 @@ export const InventarioModule: React.FC = () => {
   const [guardandoLoteRapido, setGuardandoLoteRapido] = useState(false);
   const [regularizandoVerde, setRegularizandoVerde] = useState(false);
   const [asignandoEtiquetas, setAsignandoEtiquetas] = useState(false);
+  const [modalLimpiezaDuplicadosOpen, setModalLimpiezaDuplicadosOpen] = useState(false);
 
   useEffect(() => {
     cargarDatos();
@@ -225,6 +231,71 @@ export const InventarioModule: React.FC = () => {
       setAsignandoEtiquetas(false);
     }
   };
+
+  // Detección automática de duplicados por código patrimonial o serie normalizados
+  const gruposDuplicados = useMemo(() => {
+    if (!esAdmin) return [];
+
+    const bienesActivos = bienes.filter((b) => b.estado_operativo !== 'DE_BAJA');
+    const porCodigo = new Map<string, BienPatrimonial[]>();
+    const porSerie = new Map<string, BienPatrimonial[]>();
+
+    bienesActivos.forEach((b) => {
+      const c = normalizarCodigoPatrimonial(b.codigo_patrimonial);
+      const s = normalizarSerie(b.serie);
+      if (c) {
+        if (!porCodigo.has(c)) porCodigo.set(c, []);
+        porCodigo.get(c)!.push(b);
+      }
+      if (s) {
+        if (!porSerie.has(s)) porSerie.set(s, []);
+        porSerie.get(s)!.push(b);
+      }
+    });
+
+    const grupos: GrupoDuplicado[] = [];
+    const paresVistos = new Set<string>();
+
+    porCodigo.forEach((lista, codNorm) => {
+      if (lista.length > 1) {
+        grupos.push({
+          id: `cod-${codNorm}`,
+          tipo: 'CODIGO_PATRIMONIAL',
+          clave: `Cód. Patrimonial: ${codNorm}`,
+          bienes: lista,
+        });
+        for (let i = 0; i < lista.length; i++) {
+          for (let j = i + 1; j < lista.length; j++) {
+            paresVistos.add(`${lista[i].id}-${lista[j].id}`);
+            paresVistos.add(`${lista[j].id}-${lista[i].id}`);
+          }
+        }
+      }
+    });
+
+    porSerie.forEach((lista, serieNorm) => {
+      if (lista.length > 1) {
+        const esNuevoPar = lista.some((b1, idx1) =>
+          lista.some((b2, idx2) => idx1 < idx2 && !paresVistos.has(`${b1.id}-${b2.id}`))
+        );
+
+        if (esNuevoPar) {
+          grupos.push({
+            id: `serie-${serieNorm}`,
+            tipo: 'SERIE',
+            clave: `N° Serie: ${serieNorm}`,
+            bienes: lista,
+          });
+        }
+      }
+    });
+
+    return grupos;
+  }, [bienes, esAdmin]);
+
+  const totalBienesDuplicados = useMemo(() => {
+    return gruposDuplicados.reduce((acc, g) => acc + (g.bienes.length - 1), 0);
+  }, [gruposDuplicados]);
 
   // Datos paginados
   const totalPaginas = Math.ceil(bienesFiltrados.length / ITEMS_POR_PAGINA) || 1;
@@ -601,6 +672,26 @@ export const InventarioModule: React.FC = () => {
             ) : (
               <span>Autogenerar códigos QR ({bienesSinEtiqueta.length} equipos)</span>
             )}
+          </button>
+        </div>
+      )}
+
+      {/* Banner de Detección y Limpieza de Duplicados */}
+      {gruposDuplicados.length > 0 && esAdmin && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 bg-amber-50 border border-amber-300 rounded-xl text-amber-950 text-xs shadow-xs">
+          <div className="flex items-center space-x-2">
+            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+            <span>
+              Se detectaron <strong>{gruposDuplicados.length} grupos con {totalBienesDuplicados} bien(es) duplicado(s)</strong> activo(s) en el inventario.
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setModalLimpiezaDuplicadosOpen(true)}
+            className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg shadow-xs transition-colors shrink-0 flex items-center space-x-1.5 cursor-pointer"
+          >
+            <ShieldAlert className="w-3.5 h-3.5" />
+            <span>Revisar y quitar {totalBienesDuplicados} duplicado(s)</span>
           </button>
         </div>
       )}
@@ -989,6 +1080,14 @@ export const InventarioModule: React.FC = () => {
           </div>
         </div>
       )}
+      {/* Modal de Limpieza y Depuración de Duplicados */}
+      <ModalLimpiezaDuplicados
+        isOpen={modalLimpiezaDuplicadosOpen}
+        onClose={() => setModalLimpiezaDuplicadosOpen(false)}
+        grupos={gruposDuplicados}
+        ambientes={ambientes}
+        onDuplicadoResuelto={cargarDatos}
+      />
     </div>
   );
 };

@@ -17,6 +17,8 @@ import {
   EstadoConservacion,
   COLORES_LOTE_PREDEFINIDOS,
   detectarLoteAutomatico,
+  normalizarCodigoPatrimonial,
+  normalizarSerie,
 } from '@/types';
 import { bienRepository } from '@/repositories';
 import { useAuth } from '@/hooks';
@@ -158,18 +160,18 @@ export const ImportadorInventarioModal: React.FC<ImportadorInventarioModalProps>
   };
 
   const procesarFilas = (rows: any[]) => {
-    // Mapas de códigos existentes para verificación de unicidad
-    const codigosExistentes = new Set(
-      bienesExistentes
-        .filter((b) => b.estado_operativo !== 'DE_BAJA' && b.codigo_patrimonial && b.codigo_patrimonial.toUpperCase() !== 'S/C')
-        .map((b) => b.codigo_patrimonial.trim().toUpperCase())
-    );
+    // Mapas de códigos normalizados existentes para verificación estricta de unicidad
+    const codigosExistentes = new Set<string>();
+    const seriesExistentes = new Set<string>();
 
-    const seriesExistentes = new Set(
-      bienesExistentes
-        .filter((b) => b.estado_operativo !== 'DE_BAJA' && b.serie && b.serie.toUpperCase() !== 'S/N')
-        .map((b) => b.serie.trim().toUpperCase())
-    );
+    bienesExistentes.forEach((b) => {
+      if (b.estado_operativo !== 'DE_BAJA') {
+        const cNorm = normalizarCodigoPatrimonial(b.codigo_patrimonial);
+        const sNorm = normalizarSerie(b.serie);
+        if (cNorm) codigosExistentes.add(cNorm);
+        if (sNorm) seriesExistentes.add(sNorm);
+      }
+    });
 
     const codigosEnArchivo = new Set<string>();
     const seriesEnArchivo = new Set<string>();
@@ -239,7 +241,7 @@ export const ImportadorInventarioModal: React.FC<ImportadorInventarioModalProps>
       const etiqueta_interna =
         getVal(['etiqueta interna', 'etiqueta', 'codigo interno', 'rotulado']) || '';
 
-      // Validación de duplicados y campos
+      // Validación estricta de duplicados mediante normalización
       let estadoValidacion: 'VALIDO' | 'DUPLICADO' | 'ERROR' = 'VALIDO';
       let motivoError: string | undefined;
 
@@ -247,24 +249,24 @@ export const ImportadorInventarioModal: React.FC<ImportadorInventarioModalProps>
         estadoValidacion = 'ERROR';
         motivoError = 'Falta denominación del bien';
       } else {
-        const codUpper = codigo_patrimonial.toUpperCase();
-        const serieUpper = serie.toUpperCase();
+        const cNorm = normalizarCodigoPatrimonial(codigo_patrimonial);
+        const sNorm = normalizarSerie(serie);
 
         const esCodDuplicado =
-          codUpper !== 'S/C' && (codigosExistentes.has(codUpper) || codigosEnArchivo.has(codUpper));
+          Boolean(cNorm) && (codigosExistentes.has(cNorm) || codigosEnArchivo.has(cNorm));
         const esSerieDuplicada =
-          serieUpper !== 'S/N' && (seriesExistentes.has(serieUpper) || seriesEnArchivo.has(serieUpper));
+          Boolean(sNorm) && (seriesExistentes.has(sNorm) || seriesEnArchivo.has(sNorm));
 
         if (esCodDuplicado) {
           estadoValidacion = 'DUPLICADO';
-          motivoError = `Código patrimonial "${codigo_patrimonial}" ya existe`;
+          motivoError = `Código patrimonial "${codigo_patrimonial}" ya existe (código normalizado: ${cNorm})`;
         } else if (esSerieDuplicada) {
           estadoValidacion = 'DUPLICADO';
-          motivoError = `Serie "${serie}" ya existe`;
+          motivoError = `Serie "${serie}" ya existe (serie normalizada: ${sNorm})`;
         }
 
-        if (codUpper !== 'S/C') codigosEnArchivo.add(codUpper);
-        if (serieUpper !== 'S/N') seriesEnArchivo.add(serieUpper);
+        if (cNorm) codigosEnArchivo.add(cNorm);
+        if (sNorm) seriesEnArchivo.add(sNorm);
       }
 
       return {

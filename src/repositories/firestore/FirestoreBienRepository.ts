@@ -12,7 +12,7 @@ import {
   writeBatch,
 } from 'firebase/firestore';
 import { db, auth } from '@/config/firebase';
-import { BienPatrimonial } from '@/types';
+import { BienPatrimonial, normalizarCodigoPatrimonial, normalizarSerie } from '@/types';
 import { IBienRepository, OperadorInfo } from '../interfaces';
 import { auditoriaRepository } from './FirestoreAuditoriaRepository';
 import { categoriaRepository } from './FirestoreCategoriaRepository';
@@ -145,41 +145,38 @@ export class FirestoreBienRepository implements IBienRepository {
   }
 
   /**
-   * Valida unicidad de código patrimonial y serie entre bienes activos
+   * Valida unicidad estricta de código patrimonial y serie entre bienes activos usando normalización
    */
   private async validarUnicidad(
     codigoPatrimonial: string,
     serie: string,
     ignorarId?: string
   ): Promise<void> {
-    const cleanCod = codigoPatrimonial.trim();
-    const cleanSerie = serie.trim().toUpperCase();
+    const normCod = normalizarCodigoPatrimonial(codigoPatrimonial);
+    const normSerie = normalizarSerie(serie);
 
-    // 1. Validar Código Patrimonial (si no es S/C ni vacío)
-    if (cleanCod && cleanCod.toUpperCase() !== 'S/C') {
-      const qCod = query(this.colRef, where('codigo_patrimonial', '==', cleanCod));
-      const snapCod = await getDocs(qCod);
-      const duplicado = snapCod.docs.find((d) => d.id !== ignorarId);
-      if (duplicado) {
-        const data = duplicado.data();
-        if (data.estado_operativo !== 'DE_BAJA') {
+    if (!normCod && !normSerie) return;
+
+    const snap = await getDocs(this.colRef);
+    for (const d of snap.docs) {
+      if (d.id === ignorarId) continue;
+      const data = d.data();
+      if (data.estado_operativo === 'DE_BAJA') continue;
+
+      if (normCod) {
+        const itemCodNorm = normalizarCodigoPatrimonial(data.codigo_patrimonial);
+        if (itemCodNorm && itemCodNorm === normCod) {
           throw new Error(
-            `Ya existe un bien activo registrado con el código patrimonial "${cleanCod}" (${data.denominacion || 'Equipo'}).`
+            `Ya existe un bien activo registrado con el código patrimonial "${codigoPatrimonial}" (Coincide con "${data.codigo_patrimonial}" en [${data.etiqueta_interna || 'S/E'}] ${data.denominacion || 'Equipo'}).`
           );
         }
       }
-    }
 
-    // 2. Validar Número de Serie (si no es S/N, S/S ni vacío)
-    if (cleanSerie && cleanSerie !== 'S/N' && cleanSerie !== 'S/S' && cleanSerie !== 'SIN SERIE') {
-      const qSerie = query(this.colRef, where('serie', '==', cleanSerie));
-      const snapSerie = await getDocs(qSerie);
-      const duplicado = snapSerie.docs.find((d) => d.id !== ignorarId);
-      if (duplicado) {
-        const data = duplicado.data();
-        if (data.estado_operativo !== 'DE_BAJA') {
+      if (normSerie) {
+        const itemSerieNorm = normalizarSerie(data.serie);
+        if (itemSerieNorm && itemSerieNorm === normSerie) {
           throw new Error(
-            `Ya existe un bien activo registrado con el número de serie "${cleanSerie}" (${data.denominacion || 'Equipo'}).`
+            `Ya existe un bien activo registrado con el número de serie "${serie}" (Coincide con "${data.serie}" en [${data.etiqueta_interna || 'S/E'}] ${data.denominacion || 'Equipo'}).`
           );
         }
       }
@@ -336,16 +333,32 @@ export class FirestoreBienRepository implements IBienRepository {
       return { insertados: 0, omitidos: 0, fallidos: 0 };
     }
 
-    const [todasCategorias, maximos] = await Promise.all([
+    const [todasCategorias, maximos, snapExistentes] = await Promise.all([
       categoriaRepository.listar(),
       this.calcularMaximosPorPrefijo(),
+      getDocs(this.colRef),
     ]);
 
     const catMap = new Map<string, { prefijo_etiqueta?: string; nombre?: string }>();
     todasCategorias.forEach((c) => catMap.set(c.id, c));
 
+    // Cargar códigos y series activos existentes normalizados para blindaje anti-duplicados
+    const codigosExistentes = new Set<string>();
+    const seriesExistentes = new Set<string>();
+
+    for (const d of snapExistentes.docs) {
+      const data = d.data();
+      if (data.estado_operativo !== 'DE_BAJA') {
+        const cNorm = normalizarCodigoPatrimonial(data.codigo_patrimonial);
+        const sNorm = normalizarSerie(data.serie);
+        if (cNorm) codigosExistentes.add(cNorm);
+        if (sNorm) seriesExistentes.add(sNorm);
+      }
+    }
+
     const CHUNK_SIZE = 400; // Respetar holgadamente el límite de 500 ops de Firestore
     let insertados = 0;
+    let omitidos = 0;
     let fallidos = 0;
 
     for (let i = 0; i < bienes.length; i += CHUNK_SIZE) {
@@ -354,6 +367,22 @@ export class FirestoreBienRepository implements IBienRepository {
 
       for (const item of chunk) {
         try {
+          // Validar duplicado por código patrimonial o serie normalizados
+          const cNorm = normalizarCodigoPatrimonial(item.codigo_patrimonial);
+          const sNorm = normalizarSerie(item.serie);
+
+          const esDuplicado =
+            (Boolean(cNorm) && codigosExistentes.has(cNorm)) ||
+            (Boolean(sNorm) && seriesExistentes.has(sNorm));
+
+          if (esDuplicado) {
+            omitidos++;
+            continue;
+          }
+
+          if (cNorm) codigosExistentes.add(cNorm);
+          if (sNorm) seriesExistentes.add(sNorm);
+
           const docRef = doc(this.colRef);
 
           // Resolver etiqueta interna automática si no se ingresó o es S/E
@@ -424,10 +453,10 @@ export class FirestoreBienRepository implements IBienRepository {
       accion: 'IMPORT',
       coleccion: 'bienes',
       documento_id: 'lote',
-      detalle: `Importación masiva completada: ${insertados} bienes insertados, ${fallidos} errores.`,
+      detalle: `Importación masiva completada: ${insertados} bienes insertados, ${omitidos} omitidos por duplicidad, ${fallidos} errores.`,
     });
 
-    return { insertados, omitidos: 0, fallidos };
+    return { insertados, omitidos, fallidos };
   }
 
   /**

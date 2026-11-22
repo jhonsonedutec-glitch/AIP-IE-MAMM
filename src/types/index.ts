@@ -300,3 +300,88 @@ export interface AuditoriaLog {
   detalle: string;
   fecha: string | Date;
 }
+
+export interface GrupoDuplicado {
+  id: string;
+  tipo: 'CODIGO_PATRIMONIAL' | 'SERIE' | 'AMBOS';
+  clave: string;
+  bienes: BienPatrimonial[];
+}
+
+/**
+ * Normaliza un código patrimonial para comparaciones y validación estricta de unicidad.
+ * Elimina espacios, guiones, puntos y prefijos no canónicos como 'C' antes de un código numérico (ej. 'C740805007042' -> '740805007042').
+ * Retorna "" si es vacío o "S/C".
+ */
+export function normalizarCodigoPatrimonial(valor?: string): string {
+  if (!valor) return '';
+  const clean = valor.trim().toUpperCase();
+  if (
+    clean === 'S/C' ||
+    clean === 'SC' ||
+    clean === 'SIN CODIGO' ||
+    clean === 'SIN CÓDIGO' ||
+    clean === 'SIN_CODIGO' ||
+    clean === 'NO' ||
+    clean === 'NINGUNO' ||
+    clean === '—' ||
+    clean === '-'
+  ) {
+    return '';
+  }
+
+  // Quitar espacios internos, guiones, barras y puntos
+  let res = clean.replace(/[\s\-_/.]/g, '');
+
+  // Si tiene un prefijo accidental 'C' antes de un código numérico largo (ej. C740805007042 -> 740805007042)
+  if (/^C\d{8,}$/i.test(res)) {
+    res = res.substring(1);
+  }
+
+  return res.length >= 3 ? res : '';
+}
+
+/**
+ * Normaliza un número de serie para comparaciones y validación estricta de unicidad.
+ * Convierte a mayúsculas, elimina espacios internos, guiones, símbolos y sufijos aislados (ej. "PF4DMKGN E" y "PF4DMKGN" -> "PF4DMKGN").
+ * Retorna "" si es vacío o "S/N".
+ */
+export function normalizarSerie(valor?: string): string {
+  if (!valor) return '';
+  const clean = valor.trim().toUpperCase();
+  if (
+    clean === 'S/N' ||
+    clean === 'SN' ||
+    clean === 'S/S' ||
+    clean === 'SS' ||
+    clean === 'SIN SERIE' ||
+    clean === 'SIN_SERIE' ||
+    clean === 'NO' ||
+    clean === 'NINGUNO' ||
+    clean === '—' ||
+    clean === '-'
+  ) {
+    return '';
+  }
+
+  // Manejo de sufijos aislados como "PF4DMKGN E" -> "PF4DMKGN"
+  const partes = clean.split(/\s+/);
+  let base = clean;
+  if (partes.length === 2 && partes[0].length >= 6 && partes[1].length <= 2) {
+    base = partes[0];
+  } else if (partes.length > 2 && partes[0].length >= 6) {
+    const tokensExtra = partes.slice(1).join('');
+    if (tokensExtra.length <= 2) {
+      base = partes[0];
+    }
+  }
+
+  // Eliminar espacios, guiones, barras, puntos y símbolos
+  const res = base.replace(/[\s\-_/.]/g, '').replace(/[^A-Z0-9]/g, '');
+
+  if (res === 'SN' || res === 'SS' || res === 'SINSERIE') {
+    return '';
+  }
+
+  return res.length >= 3 ? res : '';
+}
