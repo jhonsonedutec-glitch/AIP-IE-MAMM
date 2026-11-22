@@ -176,18 +176,7 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // 11. Colección de Bloques
-    // Módulos horarios y turnos de atención pedagógica del aula.
-    // - Lectura: Todos los usuarios activos.
-    // - Creación/Actualización: Exclusiva para administradores.
-    // - Eliminación: Prohibido borrado físico.
-    match /bloques/{docId} {
-      allow read: if isActiveUser();
-      allow create, update: if isAdmin();
-      allow delete: if false;
-    }
-
-    // 12. Colección de Préstamos
+    // 11. Colección de Préstamos
     // Control de circulación y asignación temporal de equipos.
     // - Lectura: Todos los usuarios activos.
     // - Creación/Actualización: Exclusiva para administradores.
@@ -198,7 +187,7 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // 13. Colección de Auditoría (Logs)
+    // 12. Colección de Auditoría (Logs)
     // Trazabilidad de operaciones críticas del sistema.
     // - Lectura: Administradores y Dirección institucional.
     // - Creación: Permitida para usuarios activos al registrar eventos.
