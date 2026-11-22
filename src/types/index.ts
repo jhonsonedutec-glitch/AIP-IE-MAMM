@@ -80,12 +80,43 @@ export interface BienPatrimonial {
   etiqueta_interna?: string;
   observacion?: string;
   bloque_id?: string;
+  lote_etiqueta?: string;
+  lote_color?: string;
   codigo_qr: string;
   total_prestamos: number;
   motivo_baja?: string;
   fecha_baja?: string | Date;
   fecha_registro: string | Date;
   actualizado_en: string | Date;
+}
+
+export interface ColorLoteOpcion {
+  nombre: string;
+  color: string;
+}
+
+export const COLORES_LOTE_PREDEFINIDOS: ColorLoteOpcion[] = [
+  { nombre: 'LOTE NARANJA', color: '#EA580C' },
+  { nombre: 'LOTE VERDE', color: '#16A34A' },
+  { nombre: 'LOTE AZUL', color: '#2563EB' },
+  { nombre: 'LOTE AMARILLO', color: '#CA8A04' },
+  { nombre: 'LOTE ROJO', color: '#DC2626' },
+  { nombre: 'LOTE MORADO', color: '#7C3AED' },
+];
+
+export function deducirColorLote(nombreLote?: string): string {
+  if (!nombreLote) return '#64748B';
+  const upper = nombreLote.toUpperCase().trim();
+  const match = COLORES_LOTE_PREDEFINIDOS.find(
+    (item) => upper.includes(item.nombre) || upper.includes(item.nombre.replace('LOTE ', ''))
+  );
+  if (match) return match.color;
+  if (upper.includes('CELESTE') || upper.includes('CYAN')) return '#06B6D4';
+  if (upper.includes('ROSA') || upper.includes('PINK')) return '#EC4899';
+  if (upper.includes('GRIS') || upper.includes('PLOMO')) return '#64748B';
+  if (upper.includes('NEGRO')) return '#0F172A';
+  if (upper.includes('BLANCO')) return '#94A3B8';
+  return '#6366F1';
 }
 
 export interface MovimientoBien {

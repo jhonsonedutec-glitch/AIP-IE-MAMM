@@ -10,7 +10,14 @@ import {
   XCircle,
   FileCheck,
 } from 'lucide-react';
-import { BienPatrimonial, Ambiente, CategoriaEquipo, EstadoConservacion } from '@/types';
+import {
+  BienPatrimonial,
+  Ambiente,
+  CategoriaEquipo,
+  EstadoConservacion,
+  COLORES_LOTE_PREDEFINIDOS,
+  deducirColorLote,
+} from '@/types';
 import { bienRepository } from '@/repositories';
 import { useAuth } from '@/hooks';
 
@@ -34,6 +41,8 @@ interface FilaPrevia {
   ambiente_id: string;
   ubicacion_detalle?: string;
   categoria_id: string;
+  lote_etiqueta?: string;
+  lote_color?: string;
   etiqueta_interna: string;
   observacion: string;
   estadoValidacion: 'VALIDO' | 'DUPLICADO' | 'ERROR';
@@ -56,6 +65,7 @@ export const ImportadorInventarioModal: React.FC<ImportadorInventarioModalProps>
   const [categoriaDefecto, setCategoriaDefecto] = useState<string>(
     categorias[0]?.id || ''
   );
+  const [loteDefecto, setLoteDefecto] = useState<string>('');
   const [omitirDuplicados, setOmitirDuplicados] = useState(true);
   const [cargandoArchivo, setCargandoArchivo] = useState(false);
   const [importando, setImportando] = useState(false);
@@ -83,6 +93,8 @@ export const ImportadorInventarioModal: React.FC<ImportadorInventarioModalProps>
         'Estado Conservación (N/B/R/M)': 'B',
         'Ambiente': ambientes[0]?.nombre || 'AIP 1',
         'Categoría': 'Laptops',
+        'Lote': 'LOTE NARANJA',
+        'Color de Lote': '#EA580C',
         'Etiqueta Interna (Opcional)': 'LAP-001',
         'Observaciones': 'Equipo entregado con cargador original 65W',
       },
@@ -96,6 +108,8 @@ export const ImportadorInventarioModal: React.FC<ImportadorInventarioModalProps>
         'Estado Conservación (N/B/R/M)': 'B',
         'Ambiente': ambientes[0]?.nombre || 'AIP 1',
         'Categoría': 'PCs de Mesa',
+        'Lote': 'LOTE VERDE',
+        'Color de Lote': '#16A34A',
         'Etiqueta Interna (Opcional)': 'PC-001',
         'Observaciones': 'CPU con monitor 21.5 y periféricos',
       },
@@ -207,6 +221,16 @@ export const ImportadorInventarioModal: React.FC<ImportadorInventarioModalProps>
         if (match) categoria_id = match.id;
       }
 
+      // Resolver Lote y Color
+      const loteRaw = getVal(['lote', 'lote / grupo', 'lote grupo', 'grupo lote', 'lotedotacion', 'dotacion']);
+      const colorLoteRaw = getVal(['color de lote', 'color lote', 'color del lote', 'colorlote']);
+
+      const lote_etiqueta = (loteRaw || loteDefecto || '').trim().toUpperCase();
+      let lote_color = '';
+      if (lote_etiqueta) {
+        lote_color = colorLoteRaw ? colorLoteRaw.trim() : deducirColorLote(lote_etiqueta);
+      }
+
       const etiqueta_interna =
         getVal(['etiqueta interna', 'etiqueta', 'codigo interno', 'rotulado']) || '';
       const observacion =
@@ -252,6 +276,8 @@ export const ImportadorInventarioModal: React.FC<ImportadorInventarioModalProps>
         ambiente_id,
         ubicacion_detalle,
         categoria_id,
+        lote_etiqueta,
+        lote_color,
         etiqueta_interna: etiqueta_interna.toUpperCase(),
         observacion,
         estadoValidacion,
@@ -293,6 +319,8 @@ export const ImportadorInventarioModal: React.FC<ImportadorInventarioModalProps>
       ambiente_id: f.ambiente_id,
       ubicacion_detalle: f.ubicacion_detalle,
       categoria_id: f.categoria_id,
+      lote_etiqueta: f.lote_etiqueta || '',
+      lote_color: f.lote_color || '',
       etiqueta_interna: f.etiqueta_interna || '',
       codigo_qr: f.etiqueta_interna || f.codigo_patrimonial,
       observacion: f.observacion,
@@ -389,9 +417,9 @@ export const ImportadorInventarioModal: React.FC<ImportadorInventarioModalProps>
           {/* Configuración de Valores por Defecto */}
           <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
             <span className="font-bold text-slate-800 block text-xs uppercase tracking-wider text-slate-500">
-              Valores Predeterminados (Para filas sin columna Ambiente o Categoría)
+              Valores Predeterminados (Para filas sin columna Ambiente, Categoría o Lote)
             </span>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">
                   Ambiente por Defecto
@@ -421,6 +449,24 @@ export const ImportadorInventarioModal: React.FC<ImportadorInventarioModalProps>
                   {categorias.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.nombre}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Lote por Defecto (Opcional)
+                </label>
+                <select
+                  value={loteDefecto}
+                  onChange={(e) => setLoteDefecto(e.target.value)}
+                  className="w-full px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                >
+                  <option value="">(Sin lote predeterminado)</option>
+                  {COLORES_LOTE_PREDEFINIDOS.map((item) => (
+                    <option key={item.nombre} value={item.nombre}>
+                      {item.nombre} ({item.color})
                     </option>
                   ))}
                 </select>
@@ -477,6 +523,7 @@ export const ImportadorInventarioModal: React.FC<ImportadorInventarioModalProps>
                     <tr>
                       <th className="py-2 px-3 w-12">#</th>
                       <th className="py-2 px-3">Estado</th>
+                      <th className="py-2 px-3">Lote</th>
                       <th className="py-2 px-3">Denominación</th>
                       <th className="py-2 px-3">Marca / Modelo</th>
                       <th className="py-2 px-3">Serie</th>
@@ -512,6 +559,26 @@ export const ImportadorInventarioModal: React.FC<ImportadorInventarioModalProps>
                             <span className="text-rose-700 font-bold bg-rose-100 px-1.5 py-0.5 rounded">
                               Error
                             </span>
+                          )}
+                        </td>
+                        <td className="py-1.5 px-3">
+                          {f.lote_etiqueta ? (
+                            <span
+                              className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-bold border"
+                              style={{
+                                backgroundColor: `${f.lote_color || '#6366F1'}15`,
+                                borderColor: `${f.lote_color || '#6366F1'}50`,
+                                color: f.lote_color || '#6366F1',
+                              }}
+                            >
+                              <span
+                                className="w-1.5 h-1.5 rounded-full inline-block shrink-0"
+                                style={{ backgroundColor: f.lote_color || '#6366F1' }}
+                              />
+                              <span className="truncate max-w-[90px]">{f.lote_etiqueta}</span>
+                            </span>
+                          ) : (
+                            <span className="text-slate-400 text-[10px]">—</span>
                           )}
                         </td>
                         <td className="py-1.5 px-3 font-semibold text-slate-800">

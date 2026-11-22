@@ -245,6 +245,22 @@ export const BienDetalleModal: React.FC<BienDetalleModalProps> = ({
                 <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${oper.color}`}>
                   {oper.label}
                 </span>
+                {bien.lote_etiqueta && (
+                  <span
+                    className="inline-flex items-center space-x-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold border"
+                    style={{
+                      backgroundColor: `${bien.lote_color || '#6366F1'}30`,
+                      borderColor: bien.lote_color || '#6366F1',
+                      color: bien.lote_color || '#6366F1',
+                    }}
+                  >
+                    <span
+                      className="w-2 h-2 rounded-full inline-block shrink-0 shadow-xs"
+                      style={{ backgroundColor: bien.lote_color || '#6366F1' }}
+                    />
+                    <span>{bien.lote_etiqueta}</span>
+                  </span>
+                )}
               </div>
               <h2 className="text-base font-bold text-white mt-1">
                 {bien.denominacion} — {bien.marca} {bien.modelo}
@@ -334,6 +350,38 @@ export const BienDetalleModal: React.FC<BienDetalleModalProps> = ({
                 <span className="font-semibold text-slate-800">{bien.color || '—'}</span>
               </div>
             </div>
+
+            {/* Lote de Adquisición si está definido */}
+            {bien.lote_etiqueta && (
+              <div
+                className="p-3 rounded-xl border flex items-center justify-between"
+                style={{
+                  backgroundColor: `${bien.lote_color || '#6366F1'}10`,
+                  borderColor: `${bien.lote_color || '#6366F1'}40`,
+                }}
+              >
+                <div className="flex items-center space-x-2.5">
+                  <span
+                    className="w-4 h-4 rounded-full inline-block border-2 border-white shadow-xs"
+                    style={{ backgroundColor: bien.lote_color || '#6366F1' }}
+                  />
+                  <div>
+                    <span className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block">
+                      Lote de Adquisición / Dotación
+                    </span>
+                    <span
+                      className="text-xs font-black tracking-tight"
+                      style={{ color: bien.lote_color || '#6366F1' }}
+                    >
+                      {bien.lote_etiqueta}
+                    </span>
+                  </div>
+                </div>
+                <span className="font-mono text-[10px] text-slate-500 font-semibold">
+                  {bien.lote_color || '#6366F1'}
+                </span>
+              </div>
+            )}
 
             {/* Ubicación y Estado */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

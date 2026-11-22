@@ -9,27 +9,63 @@ import {
   Filter,
   RefreshCw,
   Sparkles,
+  Palette,
+  X,
+  CheckCircle2,
 } from 'lucide-react';
-import { Bien, Ambiente, CategoriaEquipo, esAmbientePrestable } from '@/types';
+import {
+  Bien,
+  Ambiente,
+  CategoriaEquipo,
+  esAmbientePrestable,
+  COLORES_LOTE_PREDEFINIDOS,
+  deducirColorLote,
+} from '@/types';
+import { bienRepository } from '@/repositories';
+import { useAuth } from '@/hooks';
 
 interface GeneradorEtiquetasQRProps {
   bienes: Bien[];
   ambientes: Ambiente[];
   categorias: CategoriaEquipo[];
+  onBienesActualizados?: () => void;
 }
 
 export const GeneradorEtiquetasQR: React.FC<GeneradorEtiquetasQRProps> = ({
   bienes,
   ambientes,
   categorias,
+  onBienesActualizados,
 }) => {
+  const { user, perfil } = useAuth();
+  const esAdmin = perfil?.rol === 'ADMIN';
+
   const [tipoStockFiltro, setTipoStockFiltro] = useState<'TODOS' | 'AIP' | 'DISTRIBUIDOS'>('TODOS');
   const [ambienteFiltro, setAmbienteFiltro] = useState<string>('TODOS');
   const [categoriaFiltro, setCategoriaFiltro] = useState<string>('TODAS');
+  const [loteFiltro, setLoteFiltro] = useState<string>('TODOS');
   const [busqueda, setBusqueda] = useState<string>('');
   const [seleccionados, setSeleccionados] = useState<Set<string>>(new Set());
   const [qrDataUrls, setQrDataUrls] = useState<Record<string, string>>({});
   const [generandoQRs, setGenerandoQRs] = useState(false);
+  const [mostrarFranjaColor, setMostrarFranjaColor] = useState<boolean>(true);
+
+  // Modal para asignar lote masivo a seleccionados
+  const [modalAsignarLoteOpen, setModalAsignarLoteOpen] = useState(false);
+  const [loteAsignarSelect, setLoteAsignarSelect] = useState<string>('LOTE NARANJA');
+  const [loteAsignarNombreOtro, setLoteAsignarNombreOtro] = useState<string>('');
+  const [loteAsignarColor, setLoteAsignarColor] = useState<string>('#EA580C');
+  const [guardandoLoteMasivo, setGuardandoLoteMasivo] = useState(false);
+  const [mensajeLoteMasivo, setMensajeLoteMasivo] = useState<string | null>(null);
+
+  // Lotes únicos detectados en los bienes
+  const lotesDisponibles = useMemo(() => {
+    const set = new Set<string>();
+    bienes.forEach((b) => {
+      if (b.lote_etiqueta?.trim()) set.add(b.lote_etiqueta.trim());
+    });
+    return Array.from(set).sort();
+  }, [bienes]);
 
   // Filtrar bienes activos
   const bienesFiltrados = useMemo(() => {
@@ -50,6 +86,13 @@ export const GeneradorEtiquetasQR: React.FC<GeneradorEtiquetasQRProps> = ({
       if (categoriaFiltro !== 'TODAS' && bien.categoria_id !== categoriaFiltro) {
         return false;
       }
+      if (loteFiltro !== 'TODOS') {
+        if (loteFiltro === '__SIN_LOTE__') {
+          if (bien.lote_etiqueta && bien.lote_etiqueta.trim()) return false;
+        } else if (bien.lote_etiqueta?.trim() !== loteFiltro) {
+          return false;
+        }
+      }
       if (busqueda.trim()) {
         const query = busqueda.toLowerCase().trim();
         const coincide =
@@ -58,12 +101,13 @@ export const GeneradorEtiquetasQR: React.FC<GeneradorEtiquetasQRProps> = ({
           (bien.codigo_patrimonial && bien.codigo_patrimonial.toLowerCase().includes(query)) ||
           (bien.serie && bien.serie.toLowerCase().includes(query)) ||
           (bien.numero_serie && bien.numero_serie.toLowerCase().includes(query)) ||
+          (bien.lote_etiqueta && bien.lote_etiqueta.toLowerCase().includes(query)) ||
           bien.marca.toLowerCase().includes(query);
         if (!coincide) return false;
       }
       return true;
     });
-  }, [bienes, ambientes, tipoStockFiltro, ambienteFiltro, categoriaFiltro, busqueda]);
+  }, [bienes, ambientes, tipoStockFiltro, ambienteFiltro, categoriaFiltro, loteFiltro, busqueda]);
 
   // Manejar selección
   const toggleSeleccion = (id: string) => {
@@ -140,6 +184,46 @@ export const GeneradorEtiquetasQR: React.FC<GeneradorEtiquetasQRProps> = ({
     window.print();
   };
 
+  const handleAsignarLoteMasivo = async () => {
+    if (seleccionados.size === 0) return;
+    setGuardandoLoteMasivo(true);
+    setMensajeLoteMasivo(null);
+
+    let etiquetaFinal = '';
+    let colorFinal = '';
+    if (loteAsignarSelect === 'OTRO') {
+      if (!loteAsignarNombreOtro.trim()) {
+        setMensajeLoteMasivo('Debe especificar el nombre del lote personalizado.');
+        setGuardandoLoteMasivo(false);
+        return;
+      }
+      etiquetaFinal = loteAsignarNombreOtro.trim().toUpperCase();
+      colorFinal = loteAsignarColor.trim() || '#6366F1';
+    } else if (loteAsignarSelect) {
+      etiquetaFinal = loteAsignarSelect;
+      colorFinal = loteAsignarColor.trim() || deducirColorLote(loteAsignarSelect);
+    }
+
+    try {
+      const operador = user ? { uid: user.uid, email: user.email || '' } : undefined;
+      const ids = Array.from(seleccionados);
+      await bienRepository.asignarLoteMasivo(ids, etiquetaFinal, colorFinal, operador);
+      if (onBienesActualizados) {
+        onBienesActualizados();
+      }
+      setMensajeLoteMasivo(`¡Lote ${etiquetaFinal || 'Sin Lote'} asignado a ${ids.length} equipos!`);
+      setTimeout(() => {
+        setModalAsignarLoteOpen(false);
+        setMensajeLoteMasivo(null);
+      }, 1200);
+    } catch (err: any) {
+      console.error('Error al asignar lote masivo:', err);
+      setMensajeLoteMasivo('Error al actualizar el lote de los equipos.');
+    } finally {
+      setGuardandoLoteMasivo(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Estilos para impresión de etiquetas A4 */}
@@ -170,6 +254,16 @@ export const GeneradorEtiquetasQR: React.FC<GeneradorEtiquetasQRProps> = ({
             border: 1.5px dashed #94a3b8 !important;
             background: #ffffff !important;
             padding: 3mm 4mm !important;
+            position: relative !important;
+          }
+          .label-color-stripe {
+            position: absolute !important;
+            left: 0 !important;
+            top: 0 !important;
+            bottom: 0 !important;
+            width: 4.5mm !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
           }
           .label-card-distribuido {
             border: 2px solid #b45309 !important;
@@ -197,6 +291,22 @@ export const GeneradorEtiquetasQR: React.FC<GeneradorEtiquetasQRProps> = ({
           </div>
 
           <div className="flex items-center space-x-2">
+            {esAdmin && (
+              <button
+                type="button"
+                onClick={() => {
+                  setMensajeLoteMasivo(null);
+                  setModalAsignarLoteOpen(true);
+                }}
+                disabled={seleccionados.size === 0}
+                className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 disabled:bg-slate-50 disabled:text-slate-300 text-slate-700 font-semibold text-xs rounded-xl border border-slate-300 transition-colors flex items-center space-x-1.5 shadow-xs"
+                title="Asignar lote y color a los equipos seleccionados"
+              >
+                <Palette className="w-4 h-4 text-indigo-600" />
+                <span>Asignar Lote ({seleccionados.size})</span>
+              </button>
+            )}
+
             <button
               onClick={handleImprimir}
               disabled={seleccionados.size === 0 || generandoQRs}
@@ -213,7 +323,7 @@ export const GeneradorEtiquetasQR: React.FC<GeneradorEtiquetasQRProps> = ({
         </div>
 
         {/* Filtros */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-slate-100">
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 pt-2 border-t border-slate-100">
           <div className="relative">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
             <input
@@ -251,6 +361,22 @@ export const GeneradorEtiquetasQR: React.FC<GeneradorEtiquetasQRProps> = ({
               {categorias.map((cat) => (
                 <option key={cat.id} value={cat.id}>
                   {cat.nombre} ({cat.prefijo_etiqueta})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <select
+              value={loteFiltro}
+              onChange={(e) => setLoteFiltro(e.target.value)}
+              className="w-full text-xs px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-700 font-medium"
+            >
+              <option value="TODOS">Todos los Lotes</option>
+              <option value="__SIN_LOTE__">(Sin lote asignado)</option>
+              {lotesDisponibles.map((lote) => (
+                <option key={lote} value={lote}>
+                  {lote}
                 </option>
               ))}
             </select>
@@ -374,7 +500,7 @@ export const GeneradorEtiquetasQR: React.FC<GeneradorEtiquetasQRProps> = ({
                         &bull; {bien.denominacion}
                       </span>
                     </div>
-                    <div className="flex items-center space-x-1.5 mt-0.5">
+                    <div className="flex items-center space-x-1.5 mt-0.5 flex-wrap gap-y-1">
                       {!esAIP ? (
                         <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-300 truncate">
                           DISTRIBUIDO: {nombreAmbiente}
@@ -382,6 +508,23 @@ export const GeneradorEtiquetasQR: React.FC<GeneradorEtiquetasQRProps> = ({
                       ) : (
                         <span className="text-[9px] font-medium px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">
                           {amb?.nombre || 'AIP'}
+                        </span>
+                      )}
+                      {bien.lote_etiqueta && (
+                        <span
+                          className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[9px] font-bold border truncate"
+                          style={{
+                            backgroundColor: `${bien.lote_color || '#6366F1'}15`,
+                            borderColor: `${bien.lote_color || '#6366F1'}60`,
+                            color: bien.lote_color || '#6366F1',
+                          }}
+                          title={`Lote: ${bien.lote_etiqueta}`}
+                        >
+                          <span
+                            className="w-1.5 h-1.5 rounded-full inline-block shrink-0"
+                            style={{ backgroundColor: bien.lote_color || '#6366F1' }}
+                          />
+                          <span className="truncate max-w-[80px]">{bien.lote_etiqueta}</span>
                         </span>
                       )}
                       {bien.estado_operativo === 'PRESTADO' && (
@@ -403,14 +546,26 @@ export const GeneradorEtiquetasQR: React.FC<GeneradorEtiquetasQRProps> = ({
 
       {/* VISTA PREVIA / HOJA IMPRIMIBLE DE ETIQUETAS */}
       <div className="space-y-3">
-        <div className="no-print flex items-center justify-between">
-          <h3 className="text-sm font-bold text-slate-800 flex items-center space-x-2">
-            <Sparkles className="w-4 h-4 text-indigo-600" />
-            <span>Vista Previa de Impresión ({bienesParaImprimir.length} etiquetas)</span>
-          </h3>
-          <span className="text-xs text-slate-500">
-            Diseño optimizado para recorte y pegado en equipos
-          </span>
+        <div className="no-print flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="flex items-center space-x-2">
+            <h3 className="text-sm font-bold text-slate-800 flex items-center space-x-2">
+              <Sparkles className="w-4 h-4 text-indigo-600" />
+              <span>Vista Previa de Impresión ({bienesParaImprimir.length} etiquetas)</span>
+            </h3>
+            <span className="text-xs text-slate-500 hidden md:inline">
+              &bull; Diseño optimizado para recorte y pegado en equipos
+            </span>
+          </div>
+
+          <label className="flex items-center space-x-2 cursor-pointer select-none text-xs text-slate-700 font-semibold bg-slate-50 hover:bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200 transition-colors self-start sm:self-auto">
+            <input
+              type="checkbox"
+              checked={mostrarFranjaColor}
+              onChange={(e) => setMostrarFranjaColor(e.target.checked)}
+              className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 cursor-pointer"
+            />
+            <span>Mostrar franja de color del lote en el QR</span>
+          </label>
         </div>
 
         {bienesParaImprimir.length === 0 ? (
@@ -444,8 +599,20 @@ export const GeneradorEtiquetasQR: React.FC<GeneradorEtiquetasQRProps> = ({
                   }`}
                   style={{ minHeight: '135px' }}
                 >
+                  {/* Franja vertical de color de lote en el lateral izquierdo */}
+                  {mostrarFranjaColor && bien.lote_etiqueta && (
+                    <div
+                      className="label-color-stripe absolute left-0 top-0 bottom-0 w-2 shrink-0 z-10"
+                      style={{
+                        backgroundColor: bien.lote_color || '#6366F1',
+                        WebkitPrintColorAdjust: 'exact',
+                        printColorAdjust: 'exact',
+                      }}
+                    />
+                  )}
+
                   {/* Cabecera miniatura de la etiqueta */}
-                  <div className="flex items-center justify-between border-b border-slate-200 pb-1.5 mb-2">
+                  <div className="flex items-center justify-between border-b border-slate-200 pb-1.5 mb-2 pl-1">
                     <div className="flex items-center space-x-2">
                       <img
                         src="/logo-mamm.jpg"
@@ -456,15 +623,41 @@ export const GeneradorEtiquetasQR: React.FC<GeneradorEtiquetasQRProps> = ({
                         I.E.E. MANUEL ANTONIO MESONES MURO
                       </span>
                     </div>
-                    {!esAIP ? (
-                      <span className="text-[9px] font-extrabold text-amber-900 bg-amber-100 px-2 py-0.5 rounded border border-amber-400 uppercase tracking-tight">
-                        ASIGNADO: {nombreAmbiente}
-                      </span>
-                    ) : (
-                      <span className="text-[9px] font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200 uppercase">
-                        {amb?.nombre || 'AIP BAGUA'}
-                      </span>
-                    )}
+
+                    <div className="flex items-center space-x-1.5 shrink-0">
+                      {bien.lote_etiqueta && (
+                        <span
+                          className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[8.5px] font-black uppercase border tracking-tight"
+                          style={{
+                            backgroundColor: `${bien.lote_color || '#6366F1'}18`,
+                            borderColor: bien.lote_color || '#6366F1',
+                            color: bien.lote_color || '#6366F1',
+                            WebkitPrintColorAdjust: 'exact',
+                            printColorAdjust: 'exact',
+                          }}
+                        >
+                          <span
+                            className="w-1.5 h-1.5 rounded-full inline-block shrink-0"
+                            style={{
+                              backgroundColor: bien.lote_color || '#6366F1',
+                              WebkitPrintColorAdjust: 'exact',
+                              printColorAdjust: 'exact',
+                            }}
+                          />
+                          <span>{bien.lote_etiqueta}</span>
+                        </span>
+                      )}
+
+                      {!esAIP ? (
+                        <span className="text-[9px] font-extrabold text-amber-900 bg-amber-100 px-2 py-0.5 rounded border border-amber-400 uppercase tracking-tight">
+                          ASIGNADO: {nombreAmbiente}
+                        </span>
+                      ) : (
+                        <span className="text-[9px] font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200 uppercase">
+                          {amb?.nombre || 'AIP BAGUA'}
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   {/* Cuerpo: QR + Datos del equipo */}
@@ -528,6 +721,130 @@ export const GeneradorEtiquetasQR: React.FC<GeneradorEtiquetasQRProps> = ({
           </div>
         )}
       </div>
+      {/* Modal para asignar lote a seleccionados */}
+      {modalAsignarLoteOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in no-print">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full border border-slate-200 overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 bg-slate-900 text-white">
+              <div className="flex items-center space-x-2">
+                <Palette className="w-5 h-5 text-indigo-400" />
+                <div>
+                  <h3 className="font-bold text-sm">Asignar Lote a Equipos Seleccionados</h3>
+                  <p className="text-[11px] text-slate-400">
+                    Se actualizarán {seleccionados.size} equipos simultáneamente en Firestore
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setModalAsignarLoteOpen(false)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              {mensajeLoteMasivo && (
+                <div
+                  className={`p-3 rounded-xl text-xs font-semibold flex items-center space-x-2 ${
+                    mensajeLoteMasivo.startsWith('¡')
+                      ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                      : 'bg-rose-50 text-rose-800 border border-rose-200'
+                  }`}
+                >
+                  <CheckCircle2 className="w-4 h-4 shrink-0" />
+                  <span>{mensajeLoteMasivo}</span>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Lote Predefinido o Personalizado
+                </label>
+                <select
+                  value={loteAsignarSelect}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setLoteAsignarSelect(val);
+                    if (val && val !== 'OTRO') {
+                      const pred = COLORES_LOTE_PREDEFINIDOS.find((item) => item.nombre === val);
+                      if (pred) setLoteAsignarColor(pred.color);
+                    }
+                  }}
+                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
+                >
+                  <option value="">(Quitar Lote / Dejar sin lote)</option>
+                  {COLORES_LOTE_PREDEFINIDOS.map((item) => (
+                    <option key={item.nombre} value={item.nombre}>
+                      {item.nombre} ({item.color})
+                    </option>
+                  ))}
+                  <option value="OTRO">OTRO (Personalizado)...</option>
+                </select>
+              </div>
+
+              {loteAsignarSelect !== '' && (
+                <div className="flex items-center space-x-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                  <input
+                    type="color"
+                    value={loteAsignarColor}
+                    onChange={(e) => setLoteAsignarColor(e.target.value)}
+                    className="w-9 h-9 p-0.5 bg-white border border-slate-300 rounded-lg cursor-pointer shrink-0"
+                    title="Seleccionar color"
+                  />
+                  <div className="flex-1">
+                    <label className="block text-[11px] font-medium text-slate-600 mb-0.5">
+                      Color Hexadecimal
+                    </label>
+                    <input
+                      type="text"
+                      value={loteAsignarColor}
+                      onChange={(e) => setLoteAsignarColor(e.target.value)}
+                      placeholder="#EA580C"
+                      className="w-28 px-2 py-1 text-xs font-mono bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {loteAsignarSelect === 'OTRO' && (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Nombre del Lote Personalizado
+                  </label>
+                  <input
+                    type="text"
+                    value={loteAsignarNombreOtro}
+                    onChange={(e) => setLoteAsignarNombreOtro(e.target.value.toUpperCase())}
+                    placeholder="Ej. LOTE CELESTE, DOTACIÓN 2026"
+                    className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 font-semibold"
+                  />
+                </div>
+              )}
+
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-end space-x-2">
+                <button
+                  type="button"
+                  disabled={guardandoLoteMasivo}
+                  onClick={() => setModalAsignarLoteOpen(false)}
+                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  disabled={guardandoLoteMasivo}
+                  onClick={handleAsignarLoteMasivo}
+                  className="px-4 py-2 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg shadow-sm disabled:opacity-50 transition-colors"
+                >
+                  {guardandoLoteMasivo ? 'Aplicando...' : `Aplicar a ${seleccionados.size} Equipos`}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -12,11 +12,16 @@ import {
   Trash2,
   ChevronLeft,
   ChevronRight,
+  Tag,
+  Palette,
+  X,
 } from 'lucide-react';
 import {
   BienPatrimonial,
   Ambiente,
   CategoriaEquipo,
+  COLORES_LOTE_PREDEFINIDOS,
+  deducirColorLote,
 } from '@/types';
 import { bienRepository, ambienteRepository, categoriaRepository } from '@/repositories';
 import { useAuth } from '@/hooks';
@@ -28,7 +33,7 @@ import { ImportadorInventarioModal } from './ImportadorInventarioModal';
 const ITEMS_POR_PAGINA = 20;
 
 export const InventarioModule: React.FC = () => {
-  const { perfil } = useAuth();
+  const { user, perfil } = useAuth();
   const esAdmin = perfil?.rol === 'ADMIN';
 
   const [bienes, setBienes] = useState<BienPatrimonial[]>([]);
@@ -43,6 +48,7 @@ export const InventarioModule: React.FC = () => {
   const [filtroCategoria, setFiltroCategoria] = useState('');
   const [filtroConservacion, setFiltroConservacion] = useState('');
   const [filtroOperativo, setFiltroOperativo] = useState('');
+  const [filtroLote, setFiltroLote] = useState('');
 
   // Paginación
   const [paginaActual, setPaginaActual] = useState(1);
@@ -58,6 +64,14 @@ export const InventarioModule: React.FC = () => {
   const [bienParaBaja, setBienParaBaja] = useState<BienPatrimonial | null>(null);
 
   const [modalImportarOpen, setModalImportarOpen] = useState(false);
+
+  // Modal Rápido de Asignación de Lote / Color
+  const [modalRapidoLoteOpen, setModalRapidoLoteOpen] = useState(false);
+  const [bienParaLoteRapido, setBienParaLoteRapido] = useState<BienPatrimonial | null>(null);
+  const [loteRapidoSelect, setLoteRapidoSelect] = useState<string>('');
+  const [loteRapidoNombreOtro, setLoteRapidoNombreOtro] = useState<string>('');
+  const [loteRapidoColor, setLoteRapidoColor] = useState<string>('#EA580C');
+  const [guardandoLoteRapido, setGuardandoLoteRapido] = useState(false);
 
   useEffect(() => {
     cargarDatos();
@@ -97,13 +111,22 @@ export const InventarioModule: React.FC = () => {
     return { totalActivos, operativos, atencion, deBaja };
   }, [bienes]);
 
+  // Lotes únicos detectados en el inventario
+  const lotesDisponibles = useMemo(() => {
+    const set = new Set<string>();
+    bienes.forEach((b) => {
+      if (b.lote_etiqueta?.trim()) set.add(b.lote_etiqueta.trim());
+    });
+    return Array.from(set).sort();
+  }, [bienes]);
+
   // Filtrado reactivo en cliente
   const bienesFiltrados = useMemo(() => {
     return bienes.filter((b) => {
       // 1. Búsqueda por texto (código patrimonial, etiqueta, serie, marca, modelo, denominación)
       if (busqueda.trim()) {
         const q = busqueda.toLowerCase().trim();
-        const textoConcatenado = `${b.codigo_patrimonial} ${b.etiqueta_interna} ${b.serie} ${b.marca} ${b.modelo} ${b.denominacion}`.toLowerCase();
+        const textoConcatenado = `${b.codigo_patrimonial} ${b.etiqueta_interna} ${b.serie} ${b.marca} ${b.modelo} ${b.denominacion} ${b.lote_etiqueta || ''}`.toLowerCase();
         if (!textoConcatenado.includes(q)) return false;
       }
 
@@ -119,9 +142,18 @@ export const InventarioModule: React.FC = () => {
       // 5. Filtro de Estado Operativo
       if (filtroOperativo && b.estado_operativo !== filtroOperativo) return false;
 
+      // 6. Filtro de Lote
+      if (filtroLote) {
+        if (filtroLote === '__SIN_LOTE__') {
+          if (b.lote_etiqueta && b.lote_etiqueta.trim()) return false;
+        } else if (b.lote_etiqueta?.trim() !== filtroLote) {
+          return false;
+        }
+      }
+
       return true;
     });
-  }, [bienes, busqueda, filtroAmbiente, filtroCategoria, filtroConservacion, filtroOperativo]);
+  }, [bienes, busqueda, filtroAmbiente, filtroCategoria, filtroConservacion, filtroOperativo, filtroLote]);
 
   // Datos paginados
   const totalPaginas = Math.ceil(bienesFiltrados.length / ITEMS_POR_PAGINA) || 1;
@@ -136,7 +168,66 @@ export const InventarioModule: React.FC = () => {
     setFiltroCategoria('');
     setFiltroConservacion('');
     setFiltroOperativo('');
+    setFiltroLote('');
     setPaginaActual(1);
+  };
+
+  const abrirModalLoteRapido = (bien: BienPatrimonial) => {
+    setBienParaLoteRapido(bien);
+    if (bien.lote_etiqueta) {
+      const upper = bien.lote_etiqueta.trim().toUpperCase();
+      const coincide = COLORES_LOTE_PREDEFINIDOS.find((item) => item.nombre === upper);
+      if (coincide) {
+        setLoteRapidoSelect(coincide.nombre);
+        setLoteRapidoNombreOtro('');
+        setLoteRapidoColor(bien.lote_color || coincide.color);
+      } else {
+        setLoteRapidoSelect('OTRO');
+        setLoteRapidoNombreOtro(upper);
+        setLoteRapidoColor(bien.lote_color || deducirColorLote(upper));
+      }
+    } else {
+      setLoteRapidoSelect('');
+      setLoteRapidoNombreOtro('');
+      setLoteRapidoColor('#EA580C');
+    }
+    setModalRapidoLoteOpen(true);
+  };
+
+  const handleGuardarLoteRapido = async () => {
+    if (!bienParaLoteRapido) return;
+    setGuardandoLoteRapido(true);
+    let etiquetaFinal = '';
+    let colorFinal = '';
+    if (loteRapidoSelect === 'OTRO') {
+      etiquetaFinal = loteRapidoNombreOtro.trim().toUpperCase();
+      colorFinal = etiquetaFinal ? (loteRapidoColor.trim() || '#6366F1') : '';
+    } else if (loteRapidoSelect) {
+      etiquetaFinal = loteRapidoSelect;
+      colorFinal = loteRapidoColor.trim() || deducirColorLote(loteRapidoSelect);
+    }
+    try {
+      const operador = user ? { uid: user.uid, email: user.email || '' } : undefined;
+      await bienRepository.actualizar(
+        bienParaLoteRapido.id,
+        {
+          lote_etiqueta: etiquetaFinal,
+          lote_color: colorFinal,
+        },
+        operador
+      );
+      await cargarDatos();
+      setModalRapidoLoteOpen(false);
+      setFeedback({
+        tipo: 'ok',
+        msg: `Lote de ${bienParaLoteRapido.etiqueta_interna || bienParaLoteRapido.codigo_patrimonial} actualizado a ${etiquetaFinal || 'Sin Lote'}.`,
+      });
+    } catch (err: any) {
+      console.error('Error al actualizar lote rápido:', err);
+      setFeedback({ tipo: 'err', msg: 'No se pudo actualizar el lote del equipo.' });
+    } finally {
+      setGuardandoLoteRapido(false);
+    }
   };
 
   const getNombreAmbiente = (bien: BienPatrimonial) => {
@@ -284,7 +375,7 @@ export const InventarioModule: React.FC = () => {
         </div>
 
         {/* Desplegables de Filtro */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1 border-t border-slate-100 text-xs">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 pt-1 border-t border-slate-100 text-xs">
           <div>
             <label className="block text-[11px] font-semibold text-slate-500 mb-1">
               Ambiente / Ubicación
@@ -320,6 +411,28 @@ export const InventarioModule: React.FC = () => {
               {categorias.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.nombre}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-500 mb-1">
+              Lote / Color
+            </label>
+            <select
+              value={filtroLote}
+              onChange={(e) => {
+                setFiltroLote(e.target.value);
+                setPaginaActual(1);
+              }}
+              className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-700"
+            >
+              <option value="">Todos los lotes</option>
+              <option value="__SIN_LOTE__">(Sin lote asignado)</option>
+              {lotesDisponibles.map((lote) => (
+                <option key={lote} value={lote}>
+                  {lote}
                 </option>
               ))}
             </select>
@@ -407,9 +520,28 @@ export const InventarioModule: React.FC = () => {
                     }`}
                   >
                     <td className="py-3 px-3">
-                      <span className="font-mono font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 text-[11px]">
-                        {b.etiqueta_interna || 'S/E'}
-                      </span>
+                      <div className="flex flex-col space-y-1">
+                        <span className="font-mono font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 text-[11px] inline-block w-fit">
+                          {b.etiqueta_interna || 'S/E'}
+                        </span>
+                        {b.lote_etiqueta && (
+                          <span
+                            className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[9px] font-bold border w-fit"
+                            style={{
+                              backgroundColor: `${b.lote_color || '#6366F1'}15`,
+                              borderColor: `${b.lote_color || '#6366F1'}60`,
+                              color: b.lote_color || '#6366F1',
+                            }}
+                            title={`Lote: ${b.lote_etiqueta}`}
+                          >
+                            <span
+                              className="w-1.5 h-1.5 rounded-full inline-block shrink-0"
+                              style={{ backgroundColor: b.lote_color || '#6366F1' }}
+                            />
+                            <span className="truncate max-w-[100px]">{b.lote_etiqueta}</span>
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="py-3 px-3 font-mono font-semibold text-slate-800">
                       {b.codigo_patrimonial}
@@ -474,6 +606,14 @@ export const InventarioModule: React.FC = () => {
                       {/* Botones de Modificación (Solo ADMIN) */}
                       {esAdmin && (
                         <>
+                          <button
+                            type="button"
+                            onClick={() => abrirModalLoteRapido(b)}
+                            className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors"
+                            title="Asignar o Cambiar Lote / Color"
+                          >
+                            <Tag className="w-4 h-4" />
+                          </button>
                           <button
                             type="button"
                             onClick={() => {
@@ -606,6 +746,118 @@ export const InventarioModule: React.FC = () => {
             cargarDatos();
           }}
         />
+      )}
+
+      {/* Modal Rápido de Asignación de Lote / Color */}
+      {modalRapidoLoteOpen && bienParaLoteRapido && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full border border-slate-200 overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 bg-slate-900 text-white">
+              <div className="flex items-center space-x-2">
+                <Palette className="w-5 h-5 text-indigo-400" />
+                <div>
+                  <h3 className="font-bold text-sm">Asignar Lote / Color</h3>
+                  <p className="text-[11px] text-slate-400 font-mono">
+                    {bienParaLoteRapido.etiqueta_interna} &bull; {bienParaLoteRapido.denominacion}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setModalRapidoLoteOpen(false)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Lote Predefinido o Personalizado
+                </label>
+                <select
+                  value={loteRapidoSelect}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setLoteRapidoSelect(val);
+                    if (val && val !== 'OTRO') {
+                      const pred = COLORES_LOTE_PREDEFINIDOS.find((item) => item.nombre === val);
+                      if (pred) setLoteRapidoColor(pred.color);
+                    }
+                  }}
+                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
+                >
+                  <option value="">(Sin lote asignado)</option>
+                  {COLORES_LOTE_PREDEFINIDOS.map((item) => (
+                    <option key={item.nombre} value={item.nombre}>
+                      {item.nombre} ({item.color})
+                    </option>
+                  ))}
+                  <option value="OTRO">OTRO (Personalizado)...</option>
+                </select>
+              </div>
+
+              {loteRapidoSelect !== '' && (
+                <div className="flex items-center space-x-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                  <input
+                    type="color"
+                    value={loteRapidoColor}
+                    onChange={(e) => setLoteRapidoColor(e.target.value)}
+                    className="w-9 h-9 p-0.5 bg-white border border-slate-300 rounded-lg cursor-pointer shrink-0"
+                    title="Seleccionar color"
+                  />
+                  <div className="flex-1">
+                    <label className="block text-[11px] font-medium text-slate-600 mb-0.5">
+                      Código Hexadecimal
+                    </label>
+                    <input
+                      type="text"
+                      value={loteRapidoColor}
+                      onChange={(e) => setLoteRapidoColor(e.target.value)}
+                      placeholder="#EA580C"
+                      className="w-28 px-2 py-1 text-xs font-mono bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {loteRapidoSelect === 'OTRO' && (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Nombre del Lote Personalizado
+                  </label>
+                  <input
+                    type="text"
+                    value={loteRapidoNombreOtro}
+                    onChange={(e) => setLoteRapidoNombreOtro(e.target.value.toUpperCase())}
+                    placeholder="Ej. LOTE CELESTE, DOTACIÓN 2026"
+                    className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 font-semibold"
+                  />
+                </div>
+              )}
+
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-end space-x-2">
+                <button
+                  type="button"
+                  disabled={guardandoLoteRapido}
+                  onClick={() => setModalRapidoLoteOpen(false)}
+                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  disabled={guardandoLoteRapido}
+                  onClick={handleGuardarLoteRapido}
+                  className="px-4 py-2 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg shadow-sm disabled:opacity-50 transition-colors"
+                >
+                  {guardandoLoteRapido ? 'Guardando...' : 'Aplicar Lote'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

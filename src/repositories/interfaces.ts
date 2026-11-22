@@ -92,6 +92,12 @@ export interface IBienRepository {
     bienes: Array<Omit<BienPatrimonial, 'id' | 'fecha_registro' | 'actualizado_en'>>,
     usuarioOperador?: OperadorInfo
   ): Promise<{ insertados: number; omitidos: number; fallidos: number }>;
+  asignarLoteMasivo(
+    bienesIds: string[],
+    loteEtiqueta: string,
+    loteColor: string,
+    usuarioOperador?: OperadorInfo
+  ): Promise<void>;
 }
 
 export interface IPrestamoRepository {

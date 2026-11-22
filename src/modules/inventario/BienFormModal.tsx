@@ -6,6 +6,8 @@ import {
   CategoriaEquipo,
   EstadoConservacion,
   EstadoOperativo,
+  COLORES_LOTE_PREDEFINIDOS,
+  deducirColorLote,
 } from '@/types';
 import { bienRepository } from '@/repositories';
 import { useAuth } from '@/hooks';
@@ -163,6 +165,11 @@ export const BienFormModal: React.FC<BienFormModalProps> = ({
   const [colorSelect, setColorSelect] = useState<string>('NEGRO');
   const [colorOtro, setColorOtro] = useState('');
 
+  // Estados para Lote de Adquisición
+  const [loteSelect, setLoteSelect] = useState<string>(''); // '' = Sin lote
+  const [loteNombreOtro, setLoteNombreOtro] = useState<string>('');
+  const [loteColor, setLoteColor] = useState<string>('#EA580C');
+
   const [estacionGrupo, setEstacionGrupo] = useState('');
   const [estadoConservacion, setEstadoConservacion] = useState<EstadoConservacion>('B');
   const [estadoOperativo, setEstadoOperativo] = useState<EstadoOperativo>('OPERATIVO');
@@ -186,6 +193,16 @@ export const BienFormModal: React.FC<BienFormModalProps> = ({
       if (!nuevosModelos.includes(modeloSelect)) {
         setModeloSelect(nuevosModelos[0] || 'OTRO');
       }
+    }
+  };
+
+  const handleLoteSelectChange = (nuevoLote: string) => {
+    setLoteSelect(nuevoLote);
+    if (nuevoLote === 'OTRO') {
+      if (!loteNombreOtro) setLoteNombreOtro('');
+    } else if (nuevoLote) {
+      const pred = COLORES_LOTE_PREDEFINIDOS.find((item) => item.nombre === nuevoLote);
+      if (pred) setLoteColor(pred.color);
     }
   };
 
@@ -275,6 +292,27 @@ export const BienFormModal: React.FC<BienFormModalProps> = ({
       setEstadoConservacion(bienParaEditar.estado_conservacion || 'B');
       setEstadoOperativo(bienParaEditar.estado_operativo || 'OPERATIVO');
       setObservacion(bienParaEditar.observacion || '');
+
+      // Manejo inteligente de Lote en edición
+      if (bienParaEditar.lote_etiqueta) {
+        const etiquetaExistente = bienParaEditar.lote_etiqueta.trim().toUpperCase();
+        const coincide = COLORES_LOTE_PREDEFINIDOS.find(
+          (item) => item.nombre === etiquetaExistente
+        );
+        if (coincide) {
+          setLoteSelect(coincide.nombre);
+          setLoteNombreOtro('');
+          setLoteColor(bienParaEditar.lote_color || coincide.color);
+        } else {
+          setLoteSelect('OTRO');
+          setLoteNombreOtro(etiquetaExistente);
+          setLoteColor(bienParaEditar.lote_color || deducirColorLote(etiquetaExistente));
+        }
+      } else {
+        setLoteSelect('');
+        setLoteNombreOtro('');
+        setLoteColor('#EA580C');
+      }
     } else {
       setDenominacionSelect('LAPTOP');
       setDenominacionOtra('');
@@ -293,6 +331,9 @@ export const BienFormModal: React.FC<BienFormModalProps> = ({
       setEstadoOperativo('OPERATIVO');
       setObservacion('');
       setUbicacionDetalle('');
+      setLoteSelect('');
+      setLoteNombreOtro('');
+      setLoteColor('#EA580C');
       if (categorias.length > 0) setCategoriaId(categorias[0].id);
       if (ambientes.length > 0) setAmbienteId(ambientes[0].id);
     }
@@ -367,6 +408,21 @@ export const BienFormModal: React.FC<BienFormModalProps> = ({
     const cleanSerie = serie.trim().toUpperCase();
     const serieFinal = cleanSerie || 'S/N';
 
+    // Procesar Lote y Color
+    let loteEtiquetaFinal = '';
+    let loteColorFinal = '';
+    if (loteSelect === 'OTRO') {
+      if (!loteNombreOtro.trim()) {
+        setError('Debe especificar el nombre del lote personalizado.');
+        return;
+      }
+      loteEtiquetaFinal = loteNombreOtro.trim().toUpperCase();
+      loteColorFinal = loteColor.trim() || '#6366F1';
+    } else if (loteSelect) {
+      loteEtiquetaFinal = loteSelect;
+      loteColorFinal = loteColor.trim() || deducirColorLote(loteSelect);
+    }
+
     setLoading(true);
     setError(null);
 
@@ -390,6 +446,8 @@ export const BienFormModal: React.FC<BienFormModalProps> = ({
             serie: serieFinal,
             color: colorFinal,
             estacion_grupo: estacionGrupo.trim() || '',
+            lote_etiqueta: loteEtiquetaFinal,
+            lote_color: loteColorFinal,
             estado_conservacion: estadoConservacion,
             estado_operativo: estadoOperativo,
             observacion: observacion.trim() || '',
@@ -412,6 +470,8 @@ export const BienFormModal: React.FC<BienFormModalProps> = ({
             serie: serieFinal,
             color: colorFinal,
             estacion_grupo: estacionGrupo.trim() || '',
+            lote_etiqueta: loteEtiquetaFinal,
+            lote_color: loteColorFinal,
             estado_conservacion: estadoConservacion,
             estado_operativo: estadoOperativo,
             observacion: observacion.trim() || '',
@@ -727,6 +787,97 @@ export const BienFormModal: React.FC<BienFormModalProps> = ({
                 <option value="DE_BAJA">DE BAJA (Inoperativo)</option>
               </select>
             </div>
+          </div>
+
+          {/* Sección de Lote / Etiqueta de Color (Opcional) */}
+          <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="block font-semibold text-slate-800 text-xs uppercase tracking-wider">
+                Lote de Adquisición / Etiqueta de Color (Opcional)
+              </label>
+              {loteSelect && (
+                <span
+                  className="inline-flex items-center space-x-1.5 px-2 py-0.5 rounded-full text-[11px] font-bold border"
+                  style={{
+                    backgroundColor: `${loteColor}15`,
+                    borderColor: loteColor,
+                    color: loteColor,
+                  }}
+                >
+                  <span
+                    className="w-2.5 h-2.5 rounded-full inline-block shrink-0 shadow-xs"
+                    style={{ backgroundColor: loteColor }}
+                  />
+                  <span>
+                    {loteSelect === 'OTRO'
+                      ? loteNombreOtro || 'LOTE PERSONALIZADO'
+                      : loteSelect}
+                  </span>
+                </span>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[11px] font-medium text-slate-600 mb-1">
+                  Seleccionar Lote
+                </label>
+                <select
+                  value={loteSelect}
+                  onChange={(e) => handleLoteSelectChange(e.target.value)}
+                  className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium text-slate-800"
+                >
+                  <option value="">(Sin lote asignado)</option>
+                  {COLORES_LOTE_PREDEFINIDOS.map((item) => (
+                    <option key={item.nombre} value={item.nombre}>
+                      {item.nombre} ({item.color})
+                    </option>
+                  ))}
+                  <option value="OTRO">OTRO (Personalizado)...</option>
+                </select>
+              </div>
+
+              {loteSelect !== '' && (
+                <div>
+                  <label className="block text-[11px] font-medium text-slate-600 mb-1">
+                    Color del Lote (Vista Previa / Ajuste)
+                  </label>
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="color"
+                      value={loteColor}
+                      onChange={(e) => setLoteColor(e.target.value)}
+                      className="w-9 h-9 p-0.5 bg-white border border-slate-300 rounded-lg cursor-pointer shrink-0"
+                      title="Seleccionar color del lote"
+                    />
+                    <input
+                      type="text"
+                      value={loteColor}
+                      onChange={(e) => setLoteColor(e.target.value)}
+                      placeholder="#EA580C"
+                      className="w-24 px-2 py-1.5 text-xs font-mono bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    />
+                    <span className="text-[11px] text-slate-500">Color activo</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {loteSelect === 'OTRO' && (
+              <div className="pt-2 border-t border-slate-200">
+                <label className="block text-[11px] font-medium text-slate-700 mb-1">
+                  Nombre del Lote Personalizado * (Ej. LOTE CELESTE, DOTACIÓN 2026, FONDO MINEDU)
+                </label>
+                <input
+                  type="text"
+                  required={loteSelect === 'OTRO'}
+                  value={loteNombreOtro}
+                  onChange={(e) => setLoteNombreOtro(e.target.value.toUpperCase())}
+                  placeholder="Ej. LOTE CELESTE o DOTACIÓN 2026"
+                  className="w-full px-3 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 font-semibold text-slate-900"
+                />
+              </div>
+            )}
           </div>
 
           <div>

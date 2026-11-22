@@ -166,6 +166,8 @@ export class FirestoreBienRepository implements IBienRepository {
       estacion_grupo: bien.estacion_grupo?.trim() || '',
       ubicacion_detalle: bien.ubicacion_detalle?.trim() || '',
       observacion: bien.observacion?.trim() || '',
+      lote_etiqueta: bien.lote_etiqueta?.trim() || '',
+      lote_color: bien.lote_color?.trim() || '',
       total_prestamos: 0,
       fecha_registro: serverTimestamp(),
       actualizado_en: serverTimestamp(),
@@ -217,6 +219,12 @@ export class FirestoreBienRepository implements IBienRepository {
     }
     if (cambios.observacion !== undefined) {
       rawUpdate.observacion = cambios.observacion?.trim() || '';
+    }
+    if (cambios.lote_etiqueta !== undefined) {
+      rawUpdate.lote_etiqueta = cambios.lote_etiqueta?.trim() || '';
+    }
+    if (cambios.lote_color !== undefined) {
+      rawUpdate.lote_color = cambios.lote_color?.trim() || '';
     }
 
     const dataToUpdate = limpiarUndefined(rawUpdate);
@@ -300,6 +308,8 @@ export class FirestoreBienRepository implements IBienRepository {
             estacion_grupo: item.estacion_grupo?.trim() || '',
             ubicacion_detalle: item.ubicacion_detalle?.trim() || '',
             observacion: item.observacion?.trim() || '',
+            lote_etiqueta: item.lote_etiqueta?.trim() || '',
+            lote_color: item.lote_color?.trim() || '',
             etiqueta_interna: item.etiqueta_interna?.trim() || '',
             codigo_qr: item.codigo_qr?.trim() || item.etiqueta_interna?.trim() || '',
             total_prestamos: 0,
@@ -333,6 +343,50 @@ export class FirestoreBienRepository implements IBienRepository {
     return { insertados, omitidos: 0, fallidos };
   }
 
+  /**
+   * Actualización masiva de lote y color a un conjunto de bienes seleccionados
+   */
+  async asignarLoteMasivo(
+    bienesIds: string[],
+    loteEtiqueta: string,
+    loteColor: string,
+    operador?: OperadorInfo
+  ): Promise<void> {
+    if (bienesIds.length === 0) return;
+
+    const cleanEtiqueta = loteEtiqueta.trim().toUpperCase();
+    const cleanColor = loteColor.trim();
+    const CHUNK_SIZE = 400;
+
+    for (let i = 0; i < bienesIds.length; i += CHUNK_SIZE) {
+      const chunk = bienesIds.slice(i, i + CHUNK_SIZE);
+      const batch = writeBatch(db);
+
+      for (const id of chunk) {
+        const docRef = doc(this.colRef, id);
+        batch.update(docRef, {
+          lote_etiqueta: cleanEtiqueta,
+          lote_color: cleanColor,
+          actualizado_en: serverTimestamp(),
+        });
+      }
+
+      await batch.commit();
+    }
+
+    const operId = operador?.uid || auth.currentUser?.uid || '';
+    const operEmail = operador?.email || auth.currentUser?.email || '';
+
+    await auditoriaRepository.registrar({
+      usuario_id: operId,
+      usuario_email: operEmail,
+      accion: 'UPDATE',
+      coleccion: 'bienes',
+      documento_id: 'lote_masivo',
+      detalle: `Asignación masiva de lote "${cleanEtiqueta || 'Sin Lote'}" (${cleanColor}) a ${bienesIds.length} equipos.`,
+    });
+  }
+
   private mapDocToBien(id: string, data: any): BienPatrimonial {
     return {
       id,
@@ -352,6 +406,8 @@ export class FirestoreBienRepository implements IBienRepository {
       etiqueta_interna: data.etiqueta_interna || '',
       observacion: data.observacion || '',
       bloque_id: data.bloque_id || undefined,
+      lote_etiqueta: data.lote_etiqueta || undefined,
+      lote_color: data.lote_color || undefined,
       codigo_qr: data.codigo_qr || data.etiqueta_interna || '',
       total_prestamos: Number(data.total_prestamos || 0),
       motivo_baja: data.motivo_baja || undefined,

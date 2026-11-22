@@ -87,6 +87,16 @@ export const CatalogosPedagogicosTab: React.FC<CatalogosPedagogicosTabProps> = (
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [busquedaBienBloque, setBusquedaBienBloque] = useState('');
   const [filtroAmbienteBloque, setFiltroAmbienteBloque] = useState<string>('TODOS');
+  const [filtroLoteBloque, setFiltroLoteBloque] = useState<string>('TODOS');
+
+  // Lotes únicos detectados en los bienes
+  const lotesDisponiblesBloque = useMemo(() => {
+    const set = new Set<string>();
+    bienes.forEach((b) => {
+      if (b.lote_etiqueta?.trim()) set.add(b.lote_etiqueta.trim());
+    });
+    return Array.from(set).sort();
+  }, [bienes]);
 
   const operadorInfo = perfil
     ? { uid: perfil.uid, email: perfil.email, rol: perfil.rol, nombre: perfil.nombres }
@@ -456,16 +466,26 @@ export const CatalogosPedagogicosTab: React.FC<CatalogosPedagogicosTabProps> = (
         return false;
       }
 
+      // Filtro por Lote si no es 'TODOS'
+      if (filtroLoteBloque !== 'TODOS') {
+        if (filtroLoteBloque === '__SIN_LOTE__') {
+          if (bien.lote_etiqueta && bien.lote_etiqueta.trim()) return false;
+        } else if (bien.lote_etiqueta?.trim() !== filtroLoteBloque) {
+          return false;
+        }
+      }
+
       if (!busquedaBienBloque.trim()) return true;
       const q = busquedaBienBloque.toLowerCase();
       return (
         (bien.etiqueta_interna && bien.etiqueta_interna.toLowerCase().includes(q)) ||
         bien.denominacion.toLowerCase().includes(q) ||
         bien.marca.toLowerCase().includes(q) ||
+        (bien.lote_etiqueta && bien.lote_etiqueta.toLowerCase().includes(q)) ||
         (bien.codigo_patrimonial && bien.codigo_patrimonial.toLowerCase().includes(q))
       );
     });
-  }, [bienes, ambientes, bloques, bloqueEditando, filtroAmbienteBloque, busquedaBienBloque]);
+  }, [bienes, ambientes, bloques, bloqueEditando, filtroAmbienteBloque, filtroLoteBloque, busquedaBienBloque]);
 
   return (
     <div className="space-y-6">
@@ -1289,7 +1309,7 @@ export const CatalogosPedagogicosTab: React.FC<CatalogosPedagogicosTabProps> = (
                   <label className="text-xs font-semibold text-slate-700">
                     Seleccionar Equipos del Bloque ({formBloque.bienes_ids.length} seleccionados)
                   </label>
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1.5 flex-wrap">
                     <select
                       value={filtroAmbienteBloque}
                       onChange={(e) => setFiltroAmbienteBloque(e.target.value)}
@@ -1302,13 +1322,28 @@ export const CatalogosPedagogicosTab: React.FC<CatalogosPedagogicosTabProps> = (
                         </option>
                       ))}
                     </select>
-                    <div className="relative w-40">
+
+                    <select
+                      value={filtroLoteBloque}
+                      onChange={(e) => setFiltroLoteBloque(e.target.value)}
+                      className="text-[11px] px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg focus:bg-white focus:outline-none font-medium text-slate-700"
+                    >
+                      <option value="TODOS">Todos los Lotes</option>
+                      <option value="__SIN_LOTE__">(Sin lote)</option>
+                      {lotesDisponiblesBloque.map((lote) => (
+                        <option key={lote} value={lote}>
+                          {lote}
+                        </option>
+                      ))}
+                    </select>
+
+                    <div className="relative w-36">
                       <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2 top-2" />
                       <input
                         type="text"
                         value={busquedaBienBloque}
                         onChange={(e) => setBusquedaBienBloque(e.target.value)}
-                        placeholder="Filtrar equipos..."
+                        placeholder="Filtrar..."
                         className="w-full text-[11px] pl-6 pr-2 py-1 bg-slate-50 border border-slate-200 rounded-lg focus:bg-white focus:outline-none"
                       />
                     </div>
@@ -1318,7 +1353,7 @@ export const CatalogosPedagogicosTab: React.FC<CatalogosPedagogicosTabProps> = (
                 <div className="border border-slate-200 rounded-xl p-2 max-h-56 overflow-y-auto space-y-1.5 bg-slate-50">
                   {bienesParaBloqueFiltrados.length === 0 ? (
                     <p className="text-xs text-slate-400 text-center py-4">
-                      No se encontraron equipos disponibles en AIP.
+                      No se encontraron equipos disponibles en AIP con los filtros aplicados.
                     </p>
                   ) : (
                     bienesParaBloqueFiltrados.map((bien) => {
@@ -1334,23 +1369,42 @@ export const CatalogosPedagogicosTab: React.FC<CatalogosPedagogicosTabProps> = (
                               : 'bg-white border-slate-200 hover:border-slate-300 text-slate-700'
                           }`}
                         >
-                          <div className="flex items-center space-x-2">
+                          <div className="flex items-center space-x-2 min-w-0">
                             <input
                               type="checkbox"
                               checked={incluido}
                               onChange={() => {}}
-                              className="w-3.5 h-3.5 text-indigo-600 rounded cursor-pointer"
+                              className="w-3.5 h-3.5 text-indigo-600 rounded cursor-pointer shrink-0"
                             />
-                            <span className="font-mono font-bold">{bien.etiqueta_interna}</span>
-                            <span className="truncate max-w-[160px] text-slate-500">
+                            {bien.lote_etiqueta && (
+                              <span
+                                className="w-2.5 h-2.5 rounded-full inline-block shrink-0 shadow-xs border border-white"
+                                style={{ backgroundColor: bien.lote_color || '#6366F1' }}
+                                title={`Lote: ${bien.lote_etiqueta}`}
+                              />
+                            )}
+                            <span className="font-mono font-bold shrink-0">{bien.etiqueta_interna}</span>
+                            <span className="truncate max-w-[130px] text-slate-500">
                               &bull; {bien.denominacion} ({bien.marca})
                             </span>
-                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-medium border border-slate-200">
+                            {bien.lote_etiqueta && (
+                              <span
+                                className="text-[9px] px-1 py-0.2 rounded font-bold border truncate max-w-[70px] shrink-0"
+                                style={{
+                                  backgroundColor: `${bien.lote_color || '#6366F1'}15`,
+                                  borderColor: `${bien.lote_color || '#6366F1'}50`,
+                                  color: bien.lote_color || '#6366F1',
+                                }}
+                              >
+                                {bien.lote_etiqueta}
+                              </span>
+                            )}
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-medium border border-slate-200 shrink-0">
                               {ambEquipo?.nombre || 'AIP'}
                             </span>
                           </div>
                           <span
-                            className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
+                            className={`text-[10px] px-1.5 py-0.5 rounded font-bold shrink-0 ml-1 ${
                               bien.estado_operativo === 'OPERATIVO'
                                 ? 'bg-emerald-100 text-emerald-800'
                                 : 'bg-amber-100 text-amber-800'

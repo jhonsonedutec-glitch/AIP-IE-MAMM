@@ -1525,6 +1525,7 @@ export const PrestamosModule: React.FC = () => {
           bienes={bienes}
           ambientes={ambientes}
           categorias={categorias}
+          onBienesActualizados={cargarDatos}
         />
       )}
 
